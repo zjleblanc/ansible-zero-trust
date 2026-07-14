@@ -1,0 +1,10 @@
+---
+# Shared by configure_host, install_rpm, install_podman, init_vault, uninstall
+vault_port: "8200"
+vault_tls_enabled: true
+vault_storage_path: /opt/vault/data
+vault_config_path: /opt/vault/config
+vault_no_log: true
+vault_addr: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ vault_fqdn }}:{{ vault_port }}"
+vault_tls_cert_dest: "/opt/vault/tls/fullchain_{{ vault_fqdn }}.pem"
+vault_tls_key_dest: "/opt/vault/tls/{{ vault_fqdn }}.key"

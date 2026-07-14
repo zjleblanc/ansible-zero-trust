@@ -1,0 +1,73 @@
+---
+# Enable the KV v2 secrets engine and seed sample secrets for e2e testing.
+# Requires vault_cli / vault_cli_addr (set by install_rpm or install_podman).
+
+- name: Load vault init data for root token
+  become: true
+  when: vault_token is not defined or (vault_token | default('') | length) == 0
+  no_log: "{{ vault_no_log | default(true) }}"
+  ansible.builtin.slurp:
+    src: "{{ vault_storage_path }}/init_data.json"
+  register: _vault_kv_token_slurp
+  failed_when: false
+
+- name: Set vault_token from init data
+  when:
+    - vault_token is not defined or (vault_token | default('') | length) == 0
+    - _vault_kv_token_slurp.content is defined
+  no_log: "{{ vault_no_log | default(true) }}"
+  ansible.builtin.set_fact:
+    vault_token: "{{ (_vault_kv_token_slurp.content | b64decode | from_json).root_token }}"
+
+- name: Require vault_token
+  ansible.builtin.assert:
+    that:
+      - vault_token is defined
+      - vault_token | length > 0
+    fail_msg: >-
+      vault_token is required. Provide it explicitly, run init_vault in the same
+      play first, or ensure {{ vault_storage_path }}/init_data.json exists with
+      a root_token field.
+
+- name: Resolve Vault CLI for stdin writes
+  ansible.builtin.set_fact:
+    _vault_cli_stdin_argv: "{{ (vault_cli.split()[:2] + ['-i'] + vault_cli.split()[2:]) if (vault_cli is match('^podman\\s+exec\\b')) else vault_cli.split() }}"
+
+- name: List secrets engines
+  become: true
+  register: vault_secrets_list_result
+  changed_when: false
+  failed_when: vault_secrets_list_result.rc != 0
+  no_log: "{{ vault_no_log | default(true) }}"
+  environment:
+    VAULT_ADDR: "{{ vault_cli_addr }}"
+    VAULT_TOKEN: "{{ vault_token }}"
+  ansible.builtin.command:
+    argv: "{{ vault_cli.split() + ['secrets', 'list', '-format', 'json'] }}"
+
+- name: Enable KV v2 secrets engine
+  become: true
+  when: "(vault_kv_engine_path ~ '/') not in (vault_secrets_list_result.stdout | from_json)"
+  register: vault_kv_enable_result
+  changed_when: vault_kv_enable_result.rc == 0
+  no_log: "{{ vault_no_log | default(true) }}"
+  environment:
+    VAULT_ADDR: "{{ vault_cli_addr }}"
+    VAULT_TOKEN: "{{ vault_token }}"
+  ansible.builtin.command:
+    argv: "{{ vault_cli.split() + ['secrets', 'enable', '-path', vault_kv_engine_path, '-version', vault_kv_engine_version, 'kv'] }}"
+
+- name: Seed sample secrets
+  become: true
+  loop: "{{ vault_kv_sample_secrets }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: vault_kv_put_result
+  changed_when: vault_kv_put_result.rc == 0
+  no_log: "{{ vault_no_log | default(true) }}"
+  environment:
+    VAULT_ADDR: "{{ vault_cli_addr }}"
+    VAULT_TOKEN: "{{ vault_token }}"
+  ansible.builtin.command:
+    argv: "{{ _vault_cli_stdin_argv + ['kv', 'put', item.path | regex_replace('^secret/data/', 'secret/'), '-'] }}"
+    stdin: "{{ item.data | to_json }}"

@@ -7,6 +7,10 @@ argument_specs:
         type: str
         required: true
         description: TCP port Vault listens on (also opened in firewalld)
+      vault_fqdn:
+        type: str
+        required: false
+        description: Fully qualified domain name for Vault
       vault_tls_enabled:
         type: bool
         required: true
@@ -14,10 +18,12 @@ argument_specs:
       vault_tls_cert_dest:
         type: path
         required: false
+        default: "/opt/vault/tls/fullchain_{{ vault_fqdn }}.pem"
         description: Destination path for the TLS certificate on the host
       vault_tls_key_dest:
         type: path
         required: false
+        default: "/opt/vault/tls/{{ vault_fqdn }}.key"
         description: Destination path for the TLS private key on the host
       vault_tls_cert_src:
         type: path
@@ -50,10 +56,12 @@ argument_specs:
       vault_tls_cert_dest:
         type: path
         required: false
+        default: "/opt/vault/tls/fullchain_{{ vault_fqdn }}.pem"
         description: Destination path for the TLS certificate on the host
       vault_tls_key_dest:
         type: path
         required: false
+        default: "/opt/vault/tls/{{ vault_fqdn }}.key"
         description: Destination path for the TLS private key on the host
 
   install_podman:
@@ -78,10 +86,12 @@ argument_specs:
       vault_tls_cert_dest:
         type: path
         required: false
+        default: "/opt/vault/tls/fullchain_{{ vault_fqdn }}.pem"
         description: Destination path for the TLS certificate on the host
       vault_tls_key_dest:
         type: path
         required: false
+        default: "/opt/vault/tls/{{ vault_fqdn }}.key"
         description: Destination path for the TLS private key on the host
       vault_container_image:
         type: str
@@ -149,6 +159,212 @@ argument_specs:
         required: false
         default: true
         description: Suppress sensitive task output
+
+  configure_jwt_auth:
+    short_description: Enable and configure Vault JWT auth for AAP OIDC workload identity
+    options:
+      vault_fqdn:
+        type: str
+        required: false
+        description: Fully qualified domain name for Vault
+      vault_cli:
+        type: str
+        required: true
+        description: Vault CLI invocation (binary or podman exec wrapper)
+      vault_cli_addr:
+        type: str
+        required: true
+        description: VAULT_ADDR value for CLI operations
+      vault_token:
+        type: str
+        required: false
+        description: >-
+          Vault root or admin token. Optional when set by init_vault in the same
+          play or when init_data.json under vault_storage_path contains root_token.
+      vault_storage_path:
+        type: path
+        required: true
+        description: Host path where JWT config artifacts are written
+      vault_container_storage_path:
+        type: path
+        required: false
+        description: In-container storage path used for CLI @file arguments when vault_cli uses podman
+      vault_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+      vault_jwt_oidc_discovery_url:
+        type: str
+        required: true
+        description: AAP OIDC discovery URL (AAP base URL with /o suffix)
+      vault_jwt_oidc_discovery_ca_pem:
+        type: path
+        required: false
+        description: Controller-side path to CA PEM for AAP TLS discovery (optional)
+      vault_jwt_bound_audiences:
+        type: list
+        elements: str
+        required: false
+        description: Audiences accepted by JWT roles (defaults to vault_addr)
+      vault_jwt_static_role_name:
+        type: str
+        required: false
+        default: aap-role-static
+        description: Name of the static JWT role
+      vault_jwt_static_policy_name:
+        type: str
+        required: false
+        default: aap-policy-static
+        description: Name of the static Vault policy
+      vault_jwt_static_secret_path:
+        type: str
+        required: false
+        default: secret/data/aap/*
+        description: KV path granted read by the static policy
+      vault_jwt_static_bound_claims:
+        type: dict
+        required: false
+        description: bound_claims mapping for the static JWT role
+      vault_jwt_dynamic_role_name:
+        type: str
+        required: false
+        default: aap-role-dynamic
+        description: Name of the dynamic JWT role
+      vault_jwt_dynamic_policy_name:
+        type: str
+        required: false
+        default: aap-policy-dynamic
+        description: Name of the templated Vault policy
+      vault_jwt_dynamic_bound_claims:
+        type: dict
+        required: false
+        description: bound_claims mapping for the dynamic JWT role
+      vault_jwt_dynamic_claim_mappings:
+        type: dict
+        required: false
+        description: JWT claim to metadata mappings for templated policies
+      vault_jwt_dynamic_secret_path_template:
+        type: str
+        required: false
+        description: >-
+          Templated KV path for the dynamic policy. Use JWT_ACCESSOR as a
+          placeholder for the jwt/ auth method accessor, and [[ ]] as stand-ins
+          for Vault identity template braces (so Ansible does not interpolate them).
+
+  configure_userpass_auth:
+    short_description: Enable userpass auth and create users from a JSON config file
+    options:
+      vault_cli:
+        type: str
+        required: true
+        description: Vault CLI invocation (binary or podman exec wrapper)
+      vault_cli_addr:
+        type: str
+        required: true
+        description: VAULT_ADDR value for CLI operations
+      vault_token:
+        type: str
+        required: false
+        description: >-
+          Vault root or admin token. Optional when set by init_vault in the same
+          play or when init_data.json under vault_storage_path contains root_token.
+      vault_storage_path:
+        type: path
+        required: true
+        description: Host path where generated userpass credentials are written
+      vault_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+      vault_userpass_users_file:
+        type: str
+        required: false
+        default: vault_users.json
+        description: >-
+          Filename under the role files/ directory containing the users list
+          (username, role admin|user, optional password)
+      vault_userpass_credentials_file:
+        type: str
+        required: false
+        default: userpass_credentials.json
+        description: Filename under vault_storage_path for auto-generated passwords
+      vault_userpass_admin_policy_name:
+        type: str
+        required: false
+        default: admin-policy
+        description: Policy name attached to role=admin users (full access)
+      vault_userpass_user_policy_name:
+        type: str
+        required: false
+        default: user-policy
+        description: Policy name attached to role=user users (read policies and secrets)
+      vault_userpass_user_secret_path:
+        type: str
+        required: false
+        default: secret/data/*
+        description: KV data path granted read/list by the user policy
+      vault_userpass_user_secret_metadata_path:
+        type: str
+        required: false
+        default: secret/metadata/*
+        description: KV metadata path granted read/list by the user policy
+      vault_userpass_password_length:
+        type: int
+        required: false
+        default: 24
+        description: Length of auto-generated userpass passwords
+      vault_userpass_password_chars:
+        type: str
+        required: false
+        default: ascii_letters,digits
+        description: Character classes for auto-generated passwords (password lookup)
+
+  configure_kv_engine:
+    short_description: Enable KV v2 secrets engine and seed sample secrets for e2e testing
+    options:
+      vault_cli:
+        type: str
+        required: true
+        description: Vault CLI invocation (binary or podman exec wrapper)
+      vault_cli_addr:
+        type: str
+        required: true
+        description: VAULT_ADDR value for CLI operations
+      vault_token:
+        type: str
+        required: false
+        description: >-
+          Vault root or admin token. Optional when set by init_vault in the same
+          play or when init_data.json under vault_storage_path contains root_token.
+      vault_storage_path:
+        type: path
+        required: true
+        description: Host path where init_data.json is stored for token lookup
+      vault_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+      vault_kv_engine_path:
+        type: str
+        required: false
+        default: secret
+        description: Mount path for the KV secrets engine
+      vault_kv_engine_version:
+        type: str
+        required: false
+        default: "2"
+        description: KV secrets engine version (1 or 2)
+      vault_kv_sample_secrets:
+        type: list
+        elements: dict
+        required: false
+        description: >-
+          List of sample secrets to seed. Each entry has a path (KV v2 data path)
+          and a data dict of key-value pairs. Default entries align with the static
+          and dynamic JWT policy paths for e2e testing.
 
   uninstall:
     short_description: Detect install type and remove Vault artifacts and config

@@ -1,13 +1,5 @@
 ---
-# Common
-vault_port: "8200"
-vault_tls_enabled: true
-vault_storage_path: /opt/vault/data
-vault_config_path: /opt/vault/config
-vault_no_log: true
-vault_addr: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ vault_fqdn }}:{{ vault_port }}"
-
-# Podman
+# install_podman (also referenced by uninstall for detection/cleanup)
 vault_container_name: vault
 vault_container_image: registry.connect.redhat.com/hashicorp/vault:latest
 vault_container_uid: "100"

@@ -1,6 +1,7 @@
 # Ansible
 .ansible/
 *.retry
+inventory/local.yml
 
 # Vault / secrets
 *.vault

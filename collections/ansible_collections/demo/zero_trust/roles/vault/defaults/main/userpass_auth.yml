@@ -1,0 +1,10 @@
+---
+# configure_userpass_auth
+vault_userpass_users_file: vault_users.json
+vault_userpass_credentials_file: userpass_credentials.json
+vault_userpass_admin_policy_name: admin-policy
+vault_userpass_user_policy_name: user-policy
+vault_userpass_user_secret_path: secret/data/*
+vault_userpass_user_secret_metadata_path: secret/metadata/*
+vault_userpass_password_length: 24
+vault_userpass_password_chars: ascii_letters,digits

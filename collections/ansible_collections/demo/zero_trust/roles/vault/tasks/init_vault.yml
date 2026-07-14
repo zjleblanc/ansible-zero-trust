@@ -1,28 +1,71 @@
 ---
+- name: Vault status (preflight)
+  become: true
+  register: vault_status_preflight
+  changed_when: false
+  failed_when: vault_status_preflight.rc not in [0, 2]
+  no_log: "{{ vault_no_log | default(true) }}"
+  environment:
+    VAULT_ADDR: "{{ vault_cli_addr }}"
+  ansible.builtin.command:
+    argv: "{{ vault_cli.split() + ['status', '-format', 'json'] }}"
+
+- name: Set Vault initialization facts
+  ansible.builtin.set_fact:
+    _vault_initialized: "{{ (vault_status_preflight.stdout | from_json).initialized | bool }}"
+    _vault_sealed: "{{ (vault_status_preflight.stdout | from_json).sealed | bool }}"
+
 - name: Vault init
   become: true
+  when: not (_vault_initialized | bool)
   register: vault_init_result
   changed_when: vault_init_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
   environment:
     VAULT_ADDR: "{{ vault_cli_addr }}"
   ansible.builtin.command:
-    argv: "{{ (vault_cli.split() + ['operator', 'init', '-format', 'json']) }}"
+    argv: "{{ vault_cli.split() + ['operator', 'init', '-format', 'json'] }}"
 
-- name: Vault init data
+- name: Vault init data from operator init
+  when: not (_vault_initialized | bool)
   no_log: "{{ vault_no_log | default(true) }}"
   ansible.builtin.set_fact:
     vault_init_data: "{{ vault_init_result.stdout | from_json }}"
 
 - name: Save vault data
   become: true
+  when: not (_vault_initialized | bool)
   ansible.builtin.copy:
-    content: "{{ vault_init_data | to_nice_json(indent=2) }}"
+    content: "{{ vault_init_data | to_nice_json(indent=2) }}\n"
     dest: "{{ vault_storage_path }}/init_data.json"
     mode: "0600"
 
+- name: Load existing vault init data
+  become: true
+  when: _vault_initialized | bool
+  no_log: "{{ vault_no_log | default(true) }}"
+  ansible.builtin.slurp:
+    src: "{{ vault_storage_path }}/init_data.json"
+  register: vault_init_data_slurp
+
+- name: Vault init data from saved file
+  when: _vault_initialized | bool
+  no_log: "{{ vault_no_log | default(true) }}"
+  ansible.builtin.set_fact:
+    vault_init_data: "{{ vault_init_data_slurp.content | b64decode | from_json }}"
+
+- name: Set vault_token from init data
+  when:
+    - vault_init_data is defined
+    - vault_init_data.root_token is defined
+    - vault_token is not defined or (vault_token | length) == 0
+  no_log: "{{ vault_no_log | default(true) }}"
+  ansible.builtin.set_fact:
+    vault_token: "{{ vault_init_data.root_token }}"
+
 - name: Vault unseal
   become: true
+  when: _vault_sealed | bool
   loop: "{{ vault_init_data.unseal_keys_b64[:3] }}"
   register: vault_unseal_result
   changed_when: vault_unseal_result.rc == 0
@@ -30,17 +73,18 @@
   environment:
     VAULT_ADDR: "{{ vault_cli_addr }}"
   ansible.builtin.command:
-    argv: "{{ (vault_cli.split() + ['operator', 'unseal', '-format', 'json', item]) }}"
+    argv: "{{ vault_cli.split() + ['operator', 'unseal', '-format', 'json', item] }}"
 
 - name: Vault status
   become: true
   register: vault_status_result
   changed_when: false
+  failed_when: vault_status_result.rc not in [0, 2]
   no_log: "{{ vault_no_log | default(true) }}"
   environment:
     VAULT_ADDR: "{{ vault_cli_addr }}"
   ansible.builtin.command:
-    argv: "{{ (vault_cli.split() + ['status', '-format', 'json']) }}"
+    argv: "{{ vault_cli.split() + ['status', '-format', 'json'] }}"
 
 - name: Vault status report
   ansible.builtin.debug:

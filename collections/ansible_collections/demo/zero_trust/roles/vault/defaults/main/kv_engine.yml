@@ -1,0 +1,13 @@
+---
+# configure_kv_engine
+vault_kv_engine_path: secret
+vault_kv_engine_version: "2"
+vault_kv_sample_secrets:
+  - path: secret/data/aap/Default/ansible-sa
+    data:
+      client_id: guid
+      client_secret: secret
+  - path: secret/data/aap/Autodotes/autodotes-sa
+    data:
+      client_id: guid
+      client_secret: secret

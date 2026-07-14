@@ -1,18 +1,21 @@
 ---
 - name: Vault Automation
-  hosts: "{{ _hosts | default(omit) }}"
+  hosts: "{{ _hosts | default('vault') }}"
 
   vars:
     vault_tasks:
       - configure_host
       - install_podman
       - init_vault
+      - configure_jwt_auth
+      - configure_kv_engine
+      - configure_userpass_auth
 
   tasks:
-    - name: "Run demo.zero_trust.vault | {{ action }}"
+    - name: "Run demo.zero_trust.vault"
       loop: "{{ vault_tasks }}"
       loop_control:
-        loop_var: action
+        loop_var: function
       ansible.builtin.include_role:
         name: demo.zero_trust.vault
-        tasks_from: "{{ action }}"
+        tasks_from: "{{ function }}"

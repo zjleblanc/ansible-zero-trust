@@ -1,0 +1,9 @@
+---
+- name: Vault Uninstall
+  hosts: "{{ _hosts | default('vault') }}"
+
+  tasks:
+    - name: Uninstall Vault
+      ansible.builtin.include_role:
+        name: demo.zero_trust.vault
+        tasks_from: uninstall

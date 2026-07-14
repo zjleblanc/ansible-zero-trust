@@ -1,0 +1,23 @@
+---
+# configure_jwt_auth
+vault_jwt_bound_audiences:
+  - "{{ vault_addr }}"
+vault_jwt_static_role_name: aap-role-static
+vault_jwt_static_policy_name: aap-policy-static
+vault_jwt_static_secret_path: secret/data/aap/*
+vault_jwt_static_bound_claims_organization:
+  - Default
+  - Autodotes
+vault_jwt_static_bound_claims:
+  aap_controller_organization_name: "{{ vault_jwt_static_bound_claims_organization }}"
+vault_jwt_dynamic_role_name: aap-role-dynamic
+vault_jwt_dynamic_policy_name: aap-policy-dynamic
+vault_jwt_dynamic_bound_claims:
+  aap_controller_organization_name: "{{ vault_jwt_static_bound_claims_organization }}"
+vault_jwt_dynamic_claim_mappings:
+  aap_controller_organization_name: org
+  aap_controller_job_template_name: job_template
+# JWT_ACCESSOR is replaced at runtime with the jwt/ auth method accessor.
+# Use [[ ]] instead of Vault {{ }} so Ansible does not interpolate the identity template.
+# The role converts [[ ]] to {{ }} when writing the policy.
+vault_jwt_dynamic_secret_path_template: "secret/data/aap/[[identity.entity.aliases.JWT_ACCESSOR.metadata.org]]/*"

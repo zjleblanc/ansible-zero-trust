@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-07-14 — Add KV v2 secrets engine with sample secrets for e2e testing
+
+### Added
+
+- Vault role `configure_kv_engine` entry point that enables the KV v2 secrets engine and seeds sample secrets aligned with the static and dynamic JWT policy paths
+- Uninstall playbook `playbooks/pb_uninstall_vault.yml` and local inventory `inventory/local.yml`
+- Argument specs and defaults for KV engine path, version, and sample secrets list
+
+### Changed
+
+- `init_vault` is now idempotent — preflight status check skips init/unseal when already done, and re-reads saved `init_data.json` on subsequent runs
+- Setup playbook defaults to `vault` host group and runs `configure_kv_engine` between JWT auth and userpass auth
+- TLS cert/key destination defaults added to `configure_host`, `install_rpm`, and `install_podman` argument specs
+
+## 2026-07-14 — Add Vault userpass auth from JSON users config
+
+### Added
+
+- Vault role `configure_userpass_auth` entry point that enables userpass auth, writes admin/user policies, and creates users from `files/vault_users.json`
+- Auto-generated passwords (when omitted in config) are written to `{{ vault_storage_path }}/userpass_credentials.json`
+- Admin policy (full access) and user policy (read policies and KV secrets) Jinja templates
+- Argument specs and defaults for userpass users file, policy names, secret paths, and password generation
+
+## 2026-07-14 — Add Vault JWT auth for AAP OIDC workload identity
+
+### Added
+
+- Vault role `configure_jwt_auth` entry point that enables JWT auth, configures AAP OIDC discovery, and creates static and dynamic JWT roles with matching policies (`aap-role-static` / `aap-policy-static`, `aap-role-dynamic` / `aap-policy-dynamic`)
+- Static and templated Vault policy Jinja templates for JWT-bound secret paths
+- Sample AAP workload identity claims reference under the vault role `files/` directory
+- Argument specs and defaults for JWT OIDC discovery, bound audiences (via `vault_addr`), bound claims, and claim mappings
+
 ## 2026-07-14 — Add Vault uninstall and prefer Podman modules
 
 ### Added
