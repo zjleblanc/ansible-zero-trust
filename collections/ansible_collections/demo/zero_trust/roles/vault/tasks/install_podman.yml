@@ -129,8 +129,11 @@
 - name: Set vault CLI facts for podman deployment
   ansible.builtin.set_fact:
     vault_cli_addr: "{{ vault_tls_enabled | ternary('https', 'http') }}://127.0.0.1:{{ vault_port }}"
+    # -e VAULT_TOKEN (no value) forwards the host process env into the container so
+    # Ansible environment: VAULT_TOKEN=... reaches vault CLI inside podman exec.
     vault_cli: >-
       podman exec
       -e VAULT_ADDR={{ vault_tls_enabled | ternary('https', 'http') }}://127.0.0.1:{{ vault_port }}
       -e VAULT_SKIP_VERIFY=1
+      -e VAULT_TOKEN
       {{ vault_container_name }} vault

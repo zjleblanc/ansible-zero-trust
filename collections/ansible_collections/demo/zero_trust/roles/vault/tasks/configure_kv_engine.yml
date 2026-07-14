@@ -1,6 +1,7 @@
 ---
 # Enable the KV v2 secrets engine and seed sample secrets for e2e testing.
 # Requires vault_cli / vault_cli_addr (set by install_rpm or install_podman).
+# Podman vault_cli includes -e VAULT_TOKEN so Ansible environment: reaches the container.
 
 - name: Load vault init data for root token
   become: true

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-14 — Forward VAULT_TOKEN into Podman vault CLI
+
+### Fixed
+
+- Podman `vault_cli` now passes `-e VAULT_TOKEN` so Ansible `environment: VAULT_TOKEN=...` reaches the vault CLI inside the container during JWT, userpass, and KV configure tasks
+
 ## 2026-07-14 — Add KV v2 secrets engine with sample secrets for e2e testing
 
 ### Added

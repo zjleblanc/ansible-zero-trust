@@ -7,6 +7,7 @@
 # Vault write/policy payloads are passed on stdin (vault CLI "-") so Podman
 # installs do not need the container user to read host-written @files under
 # the data volume (root-owned 0600 caused permission denied).
+# Podman vault_cli includes -e VAULT_TOKEN so Ansible environment: reaches the container.
 
 - name: Load vault init data for root token
   become: true
