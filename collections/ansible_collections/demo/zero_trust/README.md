@@ -1,23 +1,35 @@
 # demo.zero_trust
 
-Zero-trust infrastructure automation collection.
+Zero-trust infrastructure automation for Ansible. Reusable roles and patterns for deploying and managing control-plane building blocks such as secrets management, with a layout that can grow as more components are added.
 
-## Roles
+| | |
+| --- | --- |
+| **Namespace** | `demo` |
+| **Name** | `zero_trust` |
+| **Version** | `1.0.0` |
+| **License** | GPL-3.0-or-later |
+| **Repository** | [zacharyleblanc/ansible-zero-trust](https://github.com/zacharyleblanc/ansible-zero-trust) |
 
-### vault
+## Contents
 
-Install and initialize HashiCorp Vault using discrete task entry points:
+### Roles
 
-- `configure_host` — copy TLS material and open the firewall port
-- `install_rpm` — install Vault from the HashiCorp RPM repository
-- `install_podman` — install Vault as a Podman Quadlet service
-- `init_vault` — initialize, unseal, and report Vault status
+| Role | Description | Documentation |
+| --- | --- | --- |
+| [`vault`](roles/vault/) | Install and initialize HashiCorp Vault (RPM or Podman Quadlet) via discrete task entry points | [README](roles/vault/README.md) |
 
-Invoke via `include_role` with `tasks_from`, for example:
+### Modules
 
-```yaml
-- name: Run vault install
-  ansible.builtin.include_role:
-    name: demo.zero_trust.vault
-    tasks_from: install_rpm
-```
+None yet.
+
+### Plugins
+
+None yet.
+
+### Playbooks
+
+None packaged in this collection. Example playbooks that consume these roles live in the [repository root](https://github.com/zacharyleblanc/ansible-zero-trust/tree/main/playbooks).
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
