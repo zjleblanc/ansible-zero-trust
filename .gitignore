@@ -6,7 +6,6 @@
 *.vault
 *.vault.yml
 !**/tasks/*vault*.yml
-playbooks/staging/
 
 # Python
 __pycache__/
