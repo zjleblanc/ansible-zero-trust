@@ -4,8 +4,9 @@ profile: production
 exclude_paths:
   - .ansible/
   - .venv/
-  - collections/
   - .git/
+  - "**/secrets.yml"
+  - "**/*secrets*.yml"
 
 skip_list:
   - yaml[line-length]
@@ -22,9 +23,9 @@ enable_list:
 
 use_default_rules: true
 
-offline: false
+offline: true
 
 kinds:
   - playbook: "playbooks/pb_*.yml"
-  - tasks: "playbooks/tasks/**/*.yml"
+  - tasks: "collections/ansible_collections/demo/zero_trust/roles/*/tasks/**/*.yml"
   - vars: "playbooks/vars/**/*.yml"

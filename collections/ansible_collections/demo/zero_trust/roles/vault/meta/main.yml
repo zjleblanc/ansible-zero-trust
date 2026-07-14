@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: vault
+  author: Zachary LeBlanc
+  description: Install and initialize HashiCorp Vault (RPM or Podman)
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+  galaxy_tags:
+    - vault
+    - security
+    - zerotrust
+dependencies: []

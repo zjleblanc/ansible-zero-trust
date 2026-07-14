@@ -1,0 +1,47 @@
+---
+- name: Vault init
+  become: true
+  register: vault_init_result
+  changed_when: vault_init_result.rc == 0
+  no_log: "{{ vault_no_log | default(true) }}"
+  environment:
+    VAULT_ADDR: "{{ vault_cli_addr }}"
+  ansible.builtin.command:
+    argv: "{{ (vault_cli.split() + ['operator', 'init', '-format', 'json']) }}"
+
+- name: Vault init data
+  no_log: "{{ vault_no_log | default(true) }}"
+  ansible.builtin.set_fact:
+    vault_init_data: "{{ vault_init_result.stdout | from_json }}"
+
+- name: Save vault data
+  become: true
+  ansible.builtin.copy:
+    content: "{{ vault_init_data | to_nice_json(indent=2) }}"
+    dest: "{{ vault_storage_path }}/init_data.json"
+    mode: "0600"
+
+- name: Vault unseal
+  become: true
+  loop: "{{ vault_init_data.unseal_keys_b64[:3] }}"
+  register: vault_unseal_result
+  changed_when: vault_unseal_result.rc == 0
+  no_log: "{{ vault_no_log | default(true) }}"
+  environment:
+    VAULT_ADDR: "{{ vault_cli_addr }}"
+  ansible.builtin.command:
+    argv: "{{ (vault_cli.split() + ['operator', 'unseal', '-format', 'json', item]) }}"
+
+- name: Vault status
+  become: true
+  register: vault_status_result
+  changed_when: false
+  no_log: "{{ vault_no_log | default(true) }}"
+  environment:
+    VAULT_ADDR: "{{ vault_cli_addr }}"
+  ansible.builtin.command:
+    argv: "{{ (vault_cli.split() + ['status', '-format', 'json']) }}"
+
+- name: Vault status report
+  ansible.builtin.debug:
+    msg: "{{ vault_status_result.stdout | from_json }}"

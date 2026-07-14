@@ -28,5 +28,8 @@ Thumbs.db
 # Molecule
 molecule/**/molecule/default/.molecule/
 
-# Collections installed locally
-collections/ansible_collections/
+# Collections installed locally (keep in-tree demo.zero_trust)
+collections/ansible_collections/*
+!collections/ansible_collections/demo/
+collections/ansible_collections/demo/*
+!collections/ansible_collections/demo/zero_trust/

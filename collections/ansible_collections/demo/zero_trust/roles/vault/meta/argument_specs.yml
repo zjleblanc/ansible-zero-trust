@@ -1,0 +1,151 @@
+---
+argument_specs:
+  configure_host:
+    short_description: Copy TLS certs and configure firewall for Vault
+    options:
+      vault_port:
+        type: str
+        required: true
+        description: TCP port Vault listens on (also opened in firewalld)
+      vault_tls_enabled:
+        type: bool
+        required: true
+        description: Whether TLS is enabled for Vault
+      vault_tls_cert_dest:
+        type: path
+        required: false
+        description: Destination path for the TLS certificate on the host
+      vault_tls_key_dest:
+        type: path
+        required: false
+        description: Destination path for the TLS private key on the host
+      vault_tls_cert_src:
+        type: path
+        required: false
+        description: Controller-side path to the TLS certificate to copy
+      vault_tls_key_src:
+        type: path
+        required: false
+        description: Controller-side path to the TLS private key to copy
+
+  install_rpm:
+    short_description: Install Vault via HashiCorp RPM repository
+    options:
+      vault_fqdn:
+        type: str
+        required: false
+        description: Fully qualified domain name for Vault
+      vault_port:
+        type: str
+        required: true
+        description: TCP port Vault listens on
+      vault_storage_path:
+        type: path
+        required: true
+        description: Host path for Vault file storage
+      vault_tls_enabled:
+        type: bool
+        required: true
+        description: Whether TLS is enabled for Vault
+      vault_tls_cert_dest:
+        type: path
+        required: false
+        description: Destination path for the TLS certificate on the host
+      vault_tls_key_dest:
+        type: path
+        required: false
+        description: Destination path for the TLS private key on the host
+
+  install_podman:
+    short_description: Install Vault via Podman Quadlet
+    options:
+      vault_port:
+        type: str
+        required: true
+        description: TCP port Vault listens on
+      vault_storage_path:
+        type: path
+        required: true
+        description: Host path for Vault file storage
+      vault_config_path:
+        type: path
+        required: true
+        description: Host path for Vault configuration
+      vault_tls_enabled:
+        type: bool
+        required: true
+        description: Whether TLS is enabled for Vault
+      vault_tls_cert_dest:
+        type: path
+        required: false
+        description: Destination path for the TLS certificate on the host
+      vault_tls_key_dest:
+        type: path
+        required: false
+        description: Destination path for the TLS private key on the host
+      vault_container_image:
+        type: str
+        required: true
+        description: Container image reference for Vault
+      vault_container_name:
+        type: str
+        required: true
+        description: Podman container / Quadlet unit name
+      vault_container_uid:
+        type: str
+        required: true
+        description: UID owning Vault data inside the container
+      vault_container_gid:
+        type: str
+        required: true
+        description: GID owning Vault data inside the container
+      vault_container_storage_path:
+        type: path
+        required: true
+        description: In-container path for Vault file storage
+      vault_container_config_path:
+        type: path
+        required: true
+        description: In-container path for Vault configuration
+      vault_container_tls_dir:
+        type: path
+        required: false
+        description: In-container directory for TLS material
+      vault_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+      vault_registry:
+        type: str
+        required: false
+        description: Container registry hostname for authenticated pulls
+      vault_registry_username:
+        type: str
+        required: false
+        description: Username for container registry authentication
+      vault_registry_password:
+        type: str
+        required: false
+        description: Password for container registry authentication
+
+  init_vault:
+    short_description: Initialize, unseal, and report Vault status
+    options:
+      vault_cli:
+        type: str
+        required: true
+        description: Vault CLI invocation (binary or podman exec wrapper)
+      vault_cli_addr:
+        type: str
+        required: true
+        description: VAULT_ADDR value for CLI operations
+      vault_storage_path:
+        type: path
+        required: true
+        description: Host path where init_data.json is written
+      vault_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
