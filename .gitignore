@@ -1,0 +1,32 @@
+# Ansible
+.ansible/
+*.retry
+
+# Vault / secrets
+*.vault
+*.vault.yml
+!**/tasks/*vault*.yml
+playbooks/staging/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.egg
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Molecule
+molecule/**/molecule/default/.molecule/
+
+# Collections installed locally
+collections/ansible_collections/
