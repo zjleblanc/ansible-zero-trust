@@ -35,29 +35,16 @@
            true
          ) }}
   no_log: "{{ vault_no_log | default(true) }}"
-  ansible.builtin.command:
-    argv:
-      - podman
-      - login
-      - "{{ _vault_registry }}"
-      - --username
-      - "{{ vault_registry_username }}"
-      - --password-stdin
-    stdin: "{{ vault_registry_password }}"
-  changed_when: false
+  containers.podman.podman_login:
+    registry: "{{ _vault_registry }}"
+    username: "{{ vault_registry_username }}"
+    password: "{{ vault_registry_password }}"
 
 - name: Pull Vault container image
   become: true
-  ansible.builtin.command:
-    argv:
-      - podman
-      - pull
-      - "{{ vault_container_image }}"
-  register: vault_image_pull
-  changed_when: >-
-    'Downloading' in (vault_image_pull.stdout | default(''))
-    or 'Copying' in (vault_image_pull.stdout | default(''))
-    or 'Writing' in (vault_image_pull.stdout | default(''))
+  containers.podman.podman_image:
+    name: "{{ vault_container_image }}"
+    state: present
 
 - name: Create vault host directories
   become: true

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-14 — Add Vault uninstall and prefer Podman modules
+
+### Added
+
+- Vault role `uninstall` task entry point that auto-detects RPM or Podman installs, removes artifacts, and closes the firewall port
+- Argument spec for the `uninstall` entry point
+- `AGENTS.md` guidance to discover Ansible modules via `ansible-doc -t module -l` before using `command`/`shell`
+
+### Changed
+
+- Podman install and uninstall paths now use `containers.podman` modules (`podman_login`, `podman_image`, `podman_container`) instead of raw `command`
+- Declare `containers.podman` as a collection dependency in `galaxy.yml`
+
 ## 2026-07-13 — Add demo.zero_trust collection with Vault role
 
 ### Added

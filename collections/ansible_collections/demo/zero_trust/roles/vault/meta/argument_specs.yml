@@ -149,3 +149,39 @@ argument_specs:
         required: false
         default: true
         description: Suppress sensitive task output
+
+  uninstall:
+    short_description: Detect install type and remove Vault artifacts and config
+    options:
+      vault_port:
+        type: str
+        required: true
+        description: TCP port Vault listens on (closed in firewalld)
+      vault_tls_enabled:
+        type: bool
+        required: true
+        description: Whether TLS was enabled for Vault
+      vault_tls_cert_dest:
+        type: path
+        required: false
+        description: Destination path of the TLS certificate to remove
+      vault_tls_key_dest:
+        type: path
+        required: false
+        description: Destination path of the TLS private key to remove
+      vault_storage_path:
+        type: path
+        required: true
+        description: Host path for Vault file storage to remove
+      vault_config_path:
+        type: path
+        required: true
+        description: Host path for Vault configuration to remove
+      vault_container_name:
+        type: str
+        required: true
+        description: Podman container / Quadlet unit name (used for detection and cleanup)
+      vault_container_image:
+        type: str
+        required: true
+        description: Container image reference to remove when Podman install is detected

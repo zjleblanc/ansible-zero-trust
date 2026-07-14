@@ -1,0 +1,128 @@
+---
+# Detect installation type
+- name: Check if vault RPM package is installed
+  become: true
+  ansible.builtin.command:
+    argv:
+      - rpm
+      - -q
+      - vault
+  register: vault_rpm_check
+  changed_when: false
+  failed_when: false
+
+- name: Check if Vault Quadlet unit exists
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/containers/systemd/{{ vault_container_name }}.container"
+  register: vault_quadlet_unit
+
+- name: Set installation type facts
+  ansible.builtin.set_fact:
+    _vault_rpm_installed: "{{ vault_rpm_check.rc == 0 }}"
+    _vault_podman_installed: "{{ vault_quadlet_unit.stat.exists | default(false) }}"
+
+# RPM uninstall path
+- name: Stop and disable vault service (RPM)
+  become: true
+  when: _vault_rpm_installed | bool
+  ansible.builtin.service:
+    name: vault
+    enabled: false
+    state: stopped
+
+- name: Remove vault RPM package
+  become: true
+  when: _vault_rpm_installed | bool
+  ansible.builtin.dnf:
+    name: vault
+    state: absent
+
+- name: Remove Hashicorp yum repository
+  become: true
+  when: _vault_rpm_installed | bool
+  ansible.builtin.yum_repository:
+    name: Hashicorp
+    state: absent
+
+- name: Remove RPM vault config directory
+  become: true
+  when: _vault_rpm_installed | bool
+  ansible.builtin.file:
+    path: /etc/vault.d
+    state: absent
+
+# Podman uninstall path
+- name: Stop and disable Vault Quadlet service
+  become: true
+  when: _vault_podman_installed | bool
+  ansible.builtin.systemd:
+    name: "{{ vault_container_name }}.service"
+    enabled: false
+    state: stopped
+  failed_when: false
+
+- name: Remove Vault Quadlet unit
+  become: true
+  when: _vault_podman_installed | bool
+  ansible.builtin.file:
+    path: "/etc/containers/systemd/{{ vault_container_name }}.container"
+    state: absent
+
+- name: Remove legacy podman generate-systemd unit if present
+  become: true
+  when: _vault_podman_installed | bool
+  ansible.builtin.file:
+    path: "/etc/systemd/system/container-{{ vault_container_name }}.service"
+    state: absent
+
+- name: Reload systemd after removing Quadlet unit
+  become: true
+  when: _vault_podman_installed | bool
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Remove Vault container
+  become: true
+  when: _vault_podman_installed | bool
+  containers.podman.podman_container:
+    name: "{{ vault_container_name }}"
+    state: absent
+
+- name: Remove Vault container image
+  become: true
+  when: _vault_podman_installed | bool
+  containers.podman.podman_image:
+    name: "{{ vault_container_image }}"
+    state: absent
+
+# Common cleanup
+- name: Remove TLS certificate and key
+  become: true
+  when:
+    - vault_tls_enabled | bool
+    - vault_tls_cert_dest is defined
+    - vault_tls_key_dest is defined
+  loop:
+    - "{{ vault_tls_cert_dest }}"
+    - "{{ vault_tls_key_dest }}"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+
+- name: Remove vault host directories
+  become: true
+  loop:
+    - "{{ vault_storage_path }}"
+    - "{{ vault_config_path }}"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+
+- name: Remove firewall rule
+  become: true
+  ansible.posix.firewalld:
+    port: "{{ vault_port }}/tcp"
+    permanent: true
+    state: disabled
+    immediate: true

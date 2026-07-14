@@ -12,7 +12,8 @@ tags:
   - vault
   - zerotrust
   - security
-dependencies: {}
+dependencies:
+  containers.podman: ">=1.16.0"
 repository: https://github.com/zacharyleblanc/ansible-zero-trust
 issues: https://github.com/zacharyleblanc/ansible-zero-trust/issues
 build_ignore: []
