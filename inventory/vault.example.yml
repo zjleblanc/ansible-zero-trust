@@ -1,0 +1,15 @@
+---
+all:
+  children:
+    ungrouped:
+      hosts:
+        vault:
+          ### Vault variables (Required) ###
+          vault_fqdn: vault.example.com
+          vault_jwt_oidc_discovery_url: https://ansible.example.com/o
+
+          ### TLS variables (if vault_tls_enabled is true) ###
+          # staging is a directory adjacent to the playbook directory
+          vault_tls_enabled: true
+          vault_tls_cert_src: "{{ playbook_dir }}/staging/fullchain.pem"
+          vault_tls_key_src: "{{ playbook_dir }}/staging/privkey.key"
