@@ -10,10 +10,12 @@ license:
   - GPL-3.0-or-later
 tags:
   - vault
+  - cloudflare
   - zerotrust
   - security
 dependencies:
   containers.podman: ">=1.16.0"
+  community.general: ">=9.0.0"
 repository: https://github.com/zacharyleblanc/ansible-zero-trust
 issues: https://github.com/zacharyleblanc/ansible-zero-trust/issues
 build_ignore: []

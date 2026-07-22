@@ -1,0 +1,5 @@
+---
+# install_podman
+cloudflare_container_image: docker.io/cloudflare/cloudflared:latest
+cloudflare_container_name: cloudflared
+cloudflare_podman_secret_name: cloudflare_tunnel_token

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-07-22 — Add Cloudflare Tunnel role and setup playbook
+
+### Added
+
+- `demo.zero_trust.cloudflare` role with discrete entry points: `create_tunnel`, `install_podman`, `configure_hostnames`, `configure_access`
+- End-to-end playbook `playbooks/pb_setup_cloudflare_tunnel.yml`
+- Podman Quadlet deployment for `cloudflared` with tunnel token stored as a Podman secret (`TUNNEL_TOKEN` env injection)
+- Public hostname ingress configuration via Cloudflare API and proxied CNAME records via `community.general.cloudflare_dns`
+- Optional Cloudflare Access application/policy data model (`cloudflare_access_policies`)
+- API token resolution: `CLOUDFLARE_API_TOKEN` env first, ansible-vault `vars/secrets.yml` fallback
+
+### Changed
+
+- Collection dependencies now include `community.general` (>=9.0.0) alongside `containers.podman`
+
 ## 2026-07-14 — Forward VAULT_TOKEN into Podman vault CLI
 
 ### Fixed

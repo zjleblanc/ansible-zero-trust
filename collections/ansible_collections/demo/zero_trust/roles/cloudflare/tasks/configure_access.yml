@@ -1,0 +1,11 @@
+---
+- name: Skip Access configuration when no policies provided
+  when: (cloudflare_access_policies | default([]) | length) == 0
+  ansible.builtin.debug:
+    msg: >-
+      cloudflare_access_policies is empty; skipping Access application and policy
+      configuration.
+
+- name: Configure Cloudflare Access applications and policies
+  when: (cloudflare_access_policies | default([]) | length) > 0
+  ansible.builtin.include_tasks: configure_access_apply.yml

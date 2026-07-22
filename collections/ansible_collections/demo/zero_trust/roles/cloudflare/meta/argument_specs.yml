@@ -1,0 +1,133 @@
+---
+argument_specs:
+  create_tunnel:
+    short_description: Create or find a Cloudflare Tunnel and retrieve the connector token
+    options:
+      cloudflare_api_token:
+        type: str
+        required: false
+        description: >-
+          Cloudflare API token. Prefer CLOUDFLARE_API_TOKEN env var; falls back
+          to this variable (e.g. from ansible-vault encrypted secrets).
+      cloudflare_account_id:
+        type: str
+        required: true
+        description: Cloudflare account ID
+      cloudflare_api_base:
+        type: str
+        required: false
+        default: https://api.cloudflare.com/client/v4
+        description: Cloudflare API base URL
+      cloudflare_tunnel_name:
+        type: str
+        required: true
+        description: Human-readable tunnel name
+      cloudflare_tunnel_config_src:
+        type: str
+        required: false
+        default: cloudflare
+        description: Tunnel config source (cloudflare for remotely managed)
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+
+  install_podman:
+    short_description: Deploy cloudflared connector via Podman Quadlet with Podman secret for the tunnel token
+    options:
+      cloudflare_tunnel_token:
+        type: str
+        required: true
+        description: >-
+          Tunnel connector token. Normally set by create_tunnel in the same play.
+      cloudflare_container_image:
+        type: str
+        required: true
+        description: Container image reference for cloudflared
+      cloudflare_container_name:
+        type: str
+        required: true
+        description: Podman container / Quadlet unit name
+      cloudflare_podman_secret_name:
+        type: str
+        required: false
+        default: cloudflare_tunnel_token
+        description: Name of the Podman secret storing the tunnel token
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+
+  configure_hostnames:
+    short_description: Configure tunnel public hostnames (ingress) and DNS CNAME records
+    options:
+      cloudflare_api_token:
+        type: str
+        required: false
+        description: >-
+          Cloudflare API token. Prefer CLOUDFLARE_API_TOKEN env var; falls back
+          to this variable (e.g. from ansible-vault encrypted secrets).
+      cloudflare_account_id:
+        type: str
+        required: true
+        description: Cloudflare account ID
+      cloudflare_zone:
+        type: str
+        required: true
+        description: DNS zone domain name (e.g. example.com)
+      cloudflare_tunnel_id:
+        type: str
+        required: true
+        description: Tunnel ID (set by create_tunnel or provided explicitly)
+      cloudflare_tunnel_hostnames:
+        type: list
+        elements: dict
+        required: true
+        description: >-
+          Public hostname definitions. Each entry requires hostname and service;
+          optional path and no_tls_verify.
+      cloudflare_api_base:
+        type: str
+        required: false
+        default: https://api.cloudflare.com/client/v4
+        description: Cloudflare API base URL
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+
+  configure_access:
+    short_description: Create Access applications and policies for tunnel hostnames (no-op when empty)
+    options:
+      cloudflare_api_token:
+        type: str
+        required: false
+        description: >-
+          Cloudflare API token. Prefer CLOUDFLARE_API_TOKEN env var; falls back
+          to this variable (e.g. from ansible-vault encrypted secrets).
+      cloudflare_account_id:
+        type: str
+        required: false
+        description: Cloudflare account ID (required when cloudflare_access_policies is non-empty)
+      cloudflare_access_policies:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: >-
+          Optional Access policies. Each entry has name, hostname, decision,
+          include (required), and optional require, exclude, session_duration,
+          precedence. When empty, this entry point is a no-op.
+      cloudflare_api_base:
+        type: str
+        required: false
+        default: https://api.cloudflare.com/client/v4
+        description: Cloudflare API base URL
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output

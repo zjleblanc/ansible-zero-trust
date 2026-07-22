@@ -17,6 +17,7 @@ Zero-trust infrastructure automation for Ansible. Reusable roles and patterns fo
 | Role | Description | Documentation |
 | --- | --- | --- |
 | [`vault`](roles/vault/) | Install and initialize HashiCorp Vault (RPM or Podman Quadlet) via discrete task entry points | [README](roles/vault/README.md) |
+| [`cloudflare`](roles/cloudflare/) | Create Cloudflare Tunnels, deploy cloudflared via Podman Quadlet, configure hostnames and Access policies | [README](roles/cloudflare/README.md) |
 
 ### Modules
 

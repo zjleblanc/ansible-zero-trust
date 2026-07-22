@@ -1,0 +1,19 @@
+[Unit]
+Description=Cloudflare Tunnel (Podman Quadlet)
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image={{ cloudflare_container_image }}
+ContainerName={{ cloudflare_container_name }}
+# Tunnel token is injected from the Podman secret store — never written to this unit file.
+Secret={{ cloudflare_podman_secret_name }},type=env,target=TUNNEL_TOKEN
+Exec=tunnel --no-autoupdate run
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target default.target

@@ -1,0 +1,12 @@
+---
+# Shared by create_tunnel, install_podman, configure_hostnames, configure_access
+#
+# cloudflare_api_token resolution (env first, then vault/extra-vars/inventory):
+#   1. CLOUDFLARE_API_TOKEN environment variable
+#   2. cloudflare_api_token from ansible-vault encrypted vars (e.g. playbooks/vars/secrets.yml)
+# Entry points re-resolve at runtime so env wins over vars_files.
+cloudflare_api_token: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_API_TOKEN') }}"
+cloudflare_account_id: ""
+cloudflare_zone: ""
+cloudflare_api_base: "https://api.cloudflare.com/client/v4"
+cloudflare_no_log: true

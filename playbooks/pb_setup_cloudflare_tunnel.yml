@@ -1,0 +1,24 @@
+---
+- name: Cloudflare Tunnel Automation
+  hosts: "{{ _hosts | default(omit) }}"
+
+  vars:
+    cloudflare_tasks:
+      - create_tunnel
+      - install_podman
+      - configure_hostnames
+      - configure_access
+
+  tasks:
+    - name: Load ansible-vault secrets when CLOUDFLARE_API_TOKEN is unset
+      when: lookup('ansible.builtin.env', 'CLOUDFLARE_API_TOKEN') | length == 0
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/vars/secrets.yml"
+
+    - name: "Run demo.zero_trust.cloudflare"
+      loop: "{{ cloudflare_tasks }}"
+      loop_control:
+        loop_var: function
+      ansible.builtin.include_role:
+        name: demo.zero_trust.cloudflare
+        tasks_from: "{{ function }}"

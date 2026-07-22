@@ -1,0 +1,84 @@
+---
+- name: Resolve API credentials
+  ansible.builtin.include_tasks: resolve_api_token.yml
+
+- name: Assert required hostname variables
+  ansible.builtin.assert:
+    that:
+      - cloudflare_account_id is defined
+      - cloudflare_account_id | length > 0
+      - cloudflare_zone is defined
+      - cloudflare_zone | length > 0
+      - cloudflare_tunnel_id is defined
+      - cloudflare_tunnel_id | length > 0
+      - cloudflare_tunnel_hostnames is defined
+      - cloudflare_tunnel_hostnames | length > 0
+    fail_msg: >-
+      Set cloudflare_account_id, cloudflare_zone, cloudflare_tunnel_hostnames, and ensure create_tunnel
+      has set cloudflare_tunnel_id (or provide cloudflare_tunnel_id explicitly).
+
+- name: Build tunnel ingress rules from hostnames
+  ansible.builtin.set_fact:
+    _cloudflare_ingress_rules: "{{ _cloudflare_ingress_rules | default([]) + [_cloudflare_ingress_item] }}"
+    cacheable: false
+  loop: "{{ cloudflare_tunnel_hostnames }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+  vars:
+    _cloudflare_ingress_item: >-
+      {{
+        {
+          'hostname': item.hostname,
+          'service': item.service
+        }
+        | combine(
+            {'path': item.path} if (item.path | default('') | length > 0) else {}
+          )
+        | combine(
+            {
+              'originRequest': {
+                'noTLSVerify': item.no_tls_verify | default(false) | bool
+              }
+            }
+            if (item.no_tls_verify is defined)
+            else {}
+          )
+      }}
+
+- name: Append catch-all ingress rule
+  ansible.builtin.set_fact:
+    _cloudflare_ingress_rules: "{{ _cloudflare_ingress_rules + [{'service': 'http_status:404'}] }}"
+    cacheable: false
+
+- name: Put Cloudflare tunnel configuration
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  ansible.builtin.uri:
+    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel/{{ cloudflare_tunnel_id }}/configurations"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      config:
+        ingress: "{{ _cloudflare_ingress_rules }}"
+    status_code: [200]
+    return_content: true
+  register: cloudflare_tunnel_config_put
+
+- name: Create proxied CNAME records for public hostnames
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  community.general.cloudflare_dns:
+    zone: "{{ cloudflare_zone }}"
+    record: >-
+      {{ '@'
+         if (item.hostname == cloudflare_zone)
+         else (item.hostname | regex_replace('\\.' + (cloudflare_zone | regex_escape) + '$', '')) }}
+    type: CNAME
+    value: "{{ cloudflare_tunnel_id }}.cfargotunnel.com"
+    proxied: true
+    api_token: "{{ cloudflare_api_token }}"
+    state: present
+  loop: "{{ cloudflare_tunnel_hostnames }}"
+  loop_control:
+    label: "{{ item.hostname }}"

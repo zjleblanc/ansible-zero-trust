@@ -1,0 +1,15 @@
+---
+# configure_access — empty list skips Access app/policy creation
+#
+# Example:
+# cloudflare_access_policies:
+#   - name: "Allow corporate users"
+#     hostname: app.example.com
+#     decision: allow
+#     session_duration: "24h"
+#     include:
+#       - email_domain:
+#           domain: example.com
+#     require: []
+#     exclude: []
+cloudflare_access_policies: []

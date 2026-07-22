@@ -1,0 +1,58 @@
+---
+- name: Assert tunnel token is available
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  ansible.builtin.assert:
+    that:
+      - cloudflare_tunnel_token is defined
+      - cloudflare_tunnel_token | length > 0
+    fail_msg: >-
+      cloudflare_tunnel_token is required. Run create_tunnel first in the same play,
+      or set cloudflare_tunnel_token explicitly.
+
+- name: Install podman
+  become: true
+  ansible.builtin.package:
+    name: podman
+    state: present
+
+- name: Pull cloudflared container image
+  become: true
+  containers.podman.podman_image:
+    name: "{{ cloudflare_container_image }}"
+    state: present
+
+- name: Store tunnel token as Podman secret
+  become: true
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  containers.podman.podman_secret:
+    name: "{{ cloudflare_podman_secret_name }}"
+    data: "{{ cloudflare_tunnel_token }}"
+    state: present
+    force: true
+
+- name: Ensure Quadlet unit directory exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/containers/systemd
+    mode: "0755"
+    state: directory
+
+- name: Install cloudflared Quadlet unit
+  become: true
+  ansible.builtin.template:
+    src: cloudflared.container.j2
+    dest: "/etc/containers/systemd/{{ cloudflare_container_name }}.container"
+    mode: "0644"
+  register: cloudflare_quadlet
+
+- name: Reload systemd to pick up Quadlet unit
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable and start cloudflared Quadlet service
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ cloudflare_container_name }}.service"
+    enabled: true
+    state: "{{ 'restarted' if cloudflare_quadlet.changed else 'started' }}"
