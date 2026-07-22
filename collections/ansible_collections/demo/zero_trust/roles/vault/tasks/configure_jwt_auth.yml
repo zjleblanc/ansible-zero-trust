@@ -10,13 +10,13 @@
 # Podman vault_cli includes -e VAULT_TOKEN so Ansible environment: reaches the container.
 
 - name: Load vault init data for root token
-  become: true
   when: vault_token is not defined or (vault_token | default('') | length) == 0
+  become: true
   no_log: "{{ vault_no_log | default(true) }}"
-  ansible.builtin.slurp:
-    src: "{{ vault_storage_path }}/init_data.json"
   register: _vault_jwt_token_slurp
   failed_when: false
+  ansible.builtin.slurp:
+    src: "{{ vault_storage_path }}/init_data.json"
 
 - name: Set vault_token from init data
   when:
@@ -28,13 +28,13 @@
 
 - name: Require vault_token
   ansible.builtin.assert:
-    that:
-      - vault_token is defined
-      - vault_token | length > 0
     fail_msg: >-
       vault_token is required. Provide it explicitly, run init_vault in the same
       play first, or ensure {{ vault_storage_path }}/init_data.json exists with
       a root_token field.
+    that:
+      - vault_token is defined
+      - vault_token | length > 0
 
 - name: Resolve Vault CLI for stdin writes
   ansible.builtin.set_fact:
@@ -53,8 +53,8 @@
     argv: "{{ vault_cli.split() + ['auth', 'list', '-format', 'json'] }}"
 
 - name: Enable JWT auth method
-  become: true
   when: "'jwt/' not in (vault_auth_list_result.stdout | from_json)"
+  become: true
   register: vault_jwt_enable_result
   changed_when: vault_jwt_enable_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"

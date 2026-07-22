@@ -4,13 +4,13 @@
 # Podman vault_cli includes -e VAULT_TOKEN so Ansible environment: reaches the container.
 
 - name: Load vault init data for root token
-  become: true
   when: vault_token is not defined or (vault_token | default('') | length) == 0
+  become: true
   no_log: "{{ vault_no_log | default(true) }}"
-  ansible.builtin.slurp:
-    src: "{{ vault_storage_path }}/init_data.json"
   register: _vault_kv_token_slurp
   failed_when: false
+  ansible.builtin.slurp:
+    src: "{{ vault_storage_path }}/init_data.json"
 
 - name: Set vault_token from init data
   when:
@@ -22,13 +22,13 @@
 
 - name: Require vault_token
   ansible.builtin.assert:
-    that:
-      - vault_token is defined
-      - vault_token | length > 0
     fail_msg: >-
       vault_token is required. Provide it explicitly, run init_vault in the same
       play first, or ensure {{ vault_storage_path }}/init_data.json exists with
       a root_token field.
+    that:
+      - vault_token is defined
+      - vault_token | length > 0
 
 - name: Resolve Vault CLI for stdin writes
   ansible.builtin.set_fact:
@@ -47,8 +47,8 @@
     argv: "{{ vault_cli.split() + ['secrets', 'list', '-format', 'json'] }}"
 
 - name: Enable KV v2 secrets engine
-  become: true
   when: "(vault_kv_engine_path ~ '/') not in (vault_secrets_list_result.stdout | from_json)"
+  become: true
   register: vault_kv_enable_result
   changed_when: vault_kv_enable_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
@@ -59,10 +59,10 @@
     argv: "{{ vault_cli.split() + ['secrets', 'enable', '-path', vault_kv_engine_path, '-version', vault_kv_engine_version, 'kv'] }}"
 
 - name: Seed sample secrets
-  become: true
   loop: "{{ vault_kv_sample_secrets }}"
   loop_control:
     label: "{{ item.path }}"
+  become: true
   register: vault_kv_put_result
   changed_when: vault_kv_put_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"

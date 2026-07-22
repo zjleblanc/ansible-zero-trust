@@ -21,7 +21,7 @@ _Skip keys that aren't present, unless explicitly required or mentioned_
 - loop
 - loop_control
     - loop_var
-    _ label (for loops, always provide logical label name with prefix _ in place of item)
+    - label (for loops, always provide logical label name with prefix _ in place of item)
 - miscellaneous keys
 - vars
 - module

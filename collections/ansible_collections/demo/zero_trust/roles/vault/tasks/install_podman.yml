@@ -10,22 +10,23 @@
     (vault_registry_username is defined) or
     (vault_registry_password is defined)
   ansible.builtin.assert:
+    fail_msg: >-
+      Provide both vault_registry_username and vault_registry_password
+      (and optionally vault_registry) to authenticate image pulls.
     that:
       - vault_registry_username is defined
       - vault_registry_username | length > 0
       - vault_registry_password is defined
       - vault_registry_password | length > 0
-    fail_msg: >-
-      Provide both vault_registry_username and vault_registry_password
-      (and optionally vault_registry) to authenticate image pulls.
 
 - name: Log in to container registry
-  become: true
   when:
     - vault_registry_username is defined
     - vault_registry_username | length > 0
     - vault_registry_password is defined
     - vault_registry_password | length > 0
+  become: true
+  no_log: "{{ vault_no_log | default(true) }}"
   vars:
     _vault_registry: >-
       {{ vault_registry | default(
@@ -34,11 +35,10 @@
            else 'docker.io',
            true
          ) }}
-  no_log: "{{ vault_no_log | default(true) }}"
   containers.podman.podman_login:
+    password: "{{ vault_registry_password }}"
     registry: "{{ _vault_registry }}"
     username: "{{ vault_registry_username }}"
-    password: "{{ vault_registry_password }}"
 
 - name: Pull Vault container image
   become: true
@@ -47,38 +47,42 @@
     state: present
 
 - name: Create vault host directories
-  become: true
   loop:
     - "{{ vault_storage_path }}"
     - "{{ vault_config_path }}"
     - "{{ vault_tls_cert_dest | dirname }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
   ansible.builtin.file:
-    path: "{{ item }}"
-    owner: "{{ vault_container_uid }}"
+    state: directory
     group: "{{ vault_container_gid }}"
     mode: "0755"
-    state: directory
+    owner: "{{ vault_container_uid }}"
+    path: "{{ item }}"
 
 - name: Stat TLS files
-  become: true
   when: vault_tls_enabled | bool
-  register: vault_podman_tls_files
   loop:
     - "{{ vault_tls_cert_dest }}"
     - "{{ vault_tls_key_dest }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
+  register: vault_podman_tls_files
   ansible.builtin.stat:
     path: "{{ item }}"
 
 - name: Set TLS file ownership for container
-  become: true
   when: item.stat.exists | default(false)
   loop: "{{ vault_podman_tls_files.results | default([]) }}"
   loop_control:
     label: "{{ item.item | default(item) }}"
+  become: true
   ansible.builtin.file:
-    path: "{{ item.item }}"
-    owner: "{{ vault_container_uid }}"
     group: "{{ vault_container_gid }}"
+    owner: "{{ vault_container_uid }}"
+    path: "{{ item.item }}"
 
 - name: Template vault config for container
   become: true
@@ -87,32 +91,32 @@
     vault_config_tls_cert: "{{ vault_container_tls_dir }}/{{ vault_tls_cert_dest | basename }}"
     vault_config_tls_key: "{{ vault_container_tls_dir }}/{{ vault_tls_key_dest | basename }}"
   ansible.builtin.template:
-    src: vault.hcl.j2
     dest: "{{ vault_config_path }}/vault.hcl"
-    owner: "{{ vault_container_uid }}"
     group: "{{ vault_container_gid }}"
     mode: "0640"
+    owner: "{{ vault_container_uid }}"
+    src: vault.hcl.j2
 
 - name: Ensure Quadlet unit directory exists
   become: true
   ansible.builtin.file:
-    path: /etc/containers/systemd
-    mode: "0755"
     state: directory
+    mode: "0755"
+    path: /etc/containers/systemd
 
 - name: Remove legacy podman generate-systemd unit if present
   become: true
   ansible.builtin.file:
-    path: "/etc/systemd/system/container-{{ vault_container_name }}.service"
     state: absent
+    path: "/etc/systemd/system/container-{{ vault_container_name }}.service"
 
 - name: Install Vault Quadlet unit
   become: true
+  register: vault_quadlet
   ansible.builtin.template:
-    src: vault.container.j2
     dest: "/etc/containers/systemd/{{ vault_container_name }}.container"
     mode: "0644"
-  register: vault_quadlet
+    src: vault.container.j2
 
 - name: Reload systemd to pick up Quadlet unit
   become: true
@@ -123,12 +127,11 @@
   become: true
   ansible.builtin.systemd:
     name: "{{ vault_container_name }}.service"
-    enabled: true
     state: "{{ 'restarted' if vault_quadlet.changed else 'started' }}"
+    enabled: true
 
 - name: Set vault CLI facts for podman deployment
   ansible.builtin.set_fact:
-    vault_cli_addr: "{{ vault_tls_enabled | ternary('https', 'http') }}://127.0.0.1:{{ vault_port }}"
     # -e VAULT_TOKEN (no value) forwards the host process env into the container so
     # Ansible environment: VAULT_TOKEN=... reaches vault CLI inside podman exec.
     vault_cli: >-
@@ -137,3 +140,4 @@
       -e VAULT_SKIP_VERIFY=1
       -e VAULT_TOKEN
       {{ vault_container_name }} vault
+    vault_cli_addr: "{{ vault_tls_enabled | ternary('https', 'http') }}://127.0.0.1:{{ vault_port }}"

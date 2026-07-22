@@ -2,103 +2,102 @@
 # Detect installation type
 - name: Check if vault RPM package is installed
   become: true
+  register: vault_rpm_check
+  changed_when: false
+  failed_when: false
   ansible.builtin.command:
     argv:
       - rpm
       - -q
       - vault
-  register: vault_rpm_check
-  changed_when: false
-  failed_when: false
 
 - name: Check if Vault Quadlet unit exists
   become: true
+  register: vault_quadlet_unit
   ansible.builtin.stat:
     path: "/etc/containers/systemd/{{ vault_container_name }}.container"
-  register: vault_quadlet_unit
 
 - name: Set installation type facts
   ansible.builtin.set_fact:
-    _vault_rpm_installed: "{{ vault_rpm_check.rc == 0 }}"
     _vault_podman_installed: "{{ vault_quadlet_unit.stat.exists | default(false) }}"
+    _vault_rpm_installed: "{{ vault_rpm_check.rc == 0 }}"
 
 # RPM uninstall path
 - name: Stop and disable vault service (RPM)
-  become: true
   when: _vault_rpm_installed | bool
+  become: true
   ansible.builtin.service:
     name: vault
-    enabled: false
     state: stopped
+    enabled: false
 
 - name: Remove vault RPM package
-  become: true
   when: _vault_rpm_installed | bool
+  become: true
   ansible.builtin.dnf:
     name: vault
     state: absent
 
 - name: Remove Hashicorp yum repository
-  become: true
   when: _vault_rpm_installed | bool
+  become: true
   ansible.builtin.yum_repository:
     name: Hashicorp
     state: absent
 
 - name: Remove RPM vault config directory
-  become: true
   when: _vault_rpm_installed | bool
+  become: true
   ansible.builtin.file:
-    path: /etc/vault.d
     state: absent
+    path: /etc/vault.d
 
 # Podman uninstall path
 - name: Stop and disable Vault Quadlet service
-  become: true
   when: _vault_podman_installed | bool
+  become: true
+  failed_when: false
   ansible.builtin.systemd:
     name: "{{ vault_container_name }}.service"
-    enabled: false
     state: stopped
-  failed_when: false
+    enabled: false
 
 - name: Remove Vault Quadlet unit
-  become: true
   when: _vault_podman_installed | bool
+  become: true
   ansible.builtin.file:
-    path: "/etc/containers/systemd/{{ vault_container_name }}.container"
     state: absent
+    path: "/etc/containers/systemd/{{ vault_container_name }}.container"
 
 - name: Remove legacy podman generate-systemd unit if present
-  become: true
   when: _vault_podman_installed | bool
+  become: true
   ansible.builtin.file:
-    path: "/etc/systemd/system/container-{{ vault_container_name }}.service"
     state: absent
+    path: "/etc/systemd/system/container-{{ vault_container_name }}.service"
 
 - name: Reload systemd after removing Quadlet unit
-  become: true
   when: _vault_podman_installed | bool
+  become: true
   ansible.builtin.systemd:
     daemon_reload: true
 
 - name: Remove Vault container
-  become: true
   when: _vault_podman_installed | bool
+  become: true
   containers.podman.podman_container:
     name: "{{ vault_container_name }}"
     state: absent
 
 - name: Remove Vault container image
-  become: true
   when: _vault_podman_installed | bool
+  become: true
   containers.podman.podman_image:
     name: "{{ vault_container_image }}"
     state: absent
 
 # Common cleanup
 - name: Remove TLS certificate and key
-  become: true
   when:
     - vault_tls_enabled | bool
     - vault_tls_cert_dest is defined
@@ -106,23 +105,28 @@
   loop:
     - "{{ vault_tls_cert_dest }}"
     - "{{ vault_tls_key_dest }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
   ansible.builtin.file:
-    path: "{{ item }}"
     state: absent
+    path: "{{ item }}"
 
 - name: Remove vault host directories
-  become: true
   loop:
     - "{{ vault_storage_path }}"
     - "{{ vault_config_path }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
   ansible.builtin.file:
-    path: "{{ item }}"
     state: absent
+    path: "{{ item }}"
 
 - name: Remove firewall rule
   become: true
   ansible.posix.firewalld:
-    port: "{{ vault_port }}/tcp"
-    permanent: true
     state: disabled
     immediate: true
+    permanent: true
+    port: "{{ vault_port }}/tcp"

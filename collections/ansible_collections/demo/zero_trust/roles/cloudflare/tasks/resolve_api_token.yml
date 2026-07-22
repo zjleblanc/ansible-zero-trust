@@ -5,18 +5,18 @@
   vars:
     _cloudflare_api_token_env: "{{ lookup('ansible.builtin.env', 'CLOUDFLARE_API_TOKEN') }}"
   ansible.builtin.set_fact:
+    cacheable: false
     cloudflare_api_token: >-
       {{ _cloudflare_api_token_env
          if (_cloudflare_api_token_env | length > 0)
          else (cloudflare_api_token | default('')) }}
-    cacheable: false
 
 - name: Assert Cloudflare API token is set
   no_log: "{{ cloudflare_no_log | default(true) }}"
   ansible.builtin.assert:
-    that:
-      - cloudflare_api_token is defined
-      - cloudflare_api_token | length > 0
     fail_msg: >-
       Provide CLOUDFLARE_API_TOKEN in the environment, or set cloudflare_api_token
       via ansible-vault encrypted vars (e.g. playbooks/vars/secrets.yml).
+    that:
+      - cloudflare_api_token is defined
+      - cloudflare_api_token | length > 0

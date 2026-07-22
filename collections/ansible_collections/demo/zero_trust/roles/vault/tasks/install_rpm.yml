@@ -22,58 +22,60 @@
 - name: Create storage directory
   become: true
   ansible.builtin.file:
-    path: "{{ vault_storage_path }}"
-    owner: vault
+    state: directory
     group: vault
     mode: "0755"
-    state: directory
+    owner: vault
+    path: "{{ vault_storage_path }}"
 
 - name: Ensure TLS directory ownership
-  become: true
   when: vault_tls_enabled | bool
+  become: true
   ansible.builtin.file:
-    path: "{{ vault_tls_cert_dest | dirname }}"
-    owner: vault
+    state: directory
     group: vault
     mode: "0755"
-    state: directory
+    owner: vault
+    path: "{{ vault_tls_cert_dest | dirname }}"
 
 - name: Stat TLS files
-  become: true
   when: vault_tls_enabled | bool
-  register: vault_rpm_tls_files
   loop:
     - "{{ vault_tls_cert_dest }}"
     - "{{ vault_tls_key_dest }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
+  register: vault_rpm_tls_files
   ansible.builtin.stat:
     path: "{{ item }}"
 
 - name: Set TLS file ownership
-  become: true
   when: item.stat.exists | default(false)
   loop: "{{ vault_rpm_tls_files.results | default([]) }}"
   loop_control:
     label: "{{ item.item | default(item) }}"
+  become: true
   ansible.builtin.file:
-    path: "{{ item.item }}"
-    owner: vault
     group: vault
+    owner: vault
+    path: "{{ item.item }}"
 
 - name: Template vault config
   become: true
   ansible.builtin.template:
-    src: vault.hcl.j2
     dest: /etc/vault.d/vault.hcl
-    owner: vault
     group: vault
     mode: "0640"
+    owner: vault
+    src: vault.hcl.j2
 
 - name: Start vault service
   become: true
   ansible.builtin.service:
     name: vault
-    enabled: true
     state: restarted
+    enabled: true
 
 - name: Set vault CLI facts for RPM deployment
   ansible.builtin.set_fact:

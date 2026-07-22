@@ -10,13 +10,13 @@
 # Podman vault_cli includes -e VAULT_TOKEN so Ansible environment: reaches the container.
 
 - name: Load vault init data for root token
-  become: true
   when: vault_token is not defined or (vault_token | default('') | length) == 0
+  become: true
   no_log: "{{ vault_no_log | default(true) }}"
-  ansible.builtin.slurp:
-    src: "{{ vault_storage_path }}/init_data.json"
   register: _vault_userpass_token_slurp
   failed_when: false
+  ansible.builtin.slurp:
+    src: "{{ vault_storage_path }}/init_data.json"
 
 - name: Set vault_token from init data
   when:
@@ -28,13 +28,13 @@
 
 - name: Require vault_token
   ansible.builtin.assert:
-    that:
-      - vault_token is defined
-      - vault_token | length > 0
     fail_msg: >-
       vault_token is required. Provide it explicitly, run init_vault in the same
       play first, or ensure {{ vault_storage_path }}/init_data.json exists with
       a root_token field.
+    that:
+      - vault_token is defined
+      - vault_token | length > 0
 
 - name: Resolve Vault CLI for stdin writes
   ansible.builtin.set_fact:
@@ -46,24 +46,24 @@
 
 - name: Require users list in config
   ansible.builtin.assert:
+    fail_msg: >-
+      {{ vault_userpass_users_file }} must contain a non-empty "users" list.
     that:
       - _vault_users_config.users is defined
       - _vault_users_config.users | length > 0
-    fail_msg: >-
-      {{ vault_userpass_users_file }} must contain a non-empty "users" list.
 
 - name: Validate user entries
+  loop: "{{ _vault_users_config.users }}"
+  loop_control:
+    label: "{{ item.username | default('unknown') }}"
   ansible.builtin.assert:
+    fail_msg: >-
+      Each user requires username and role (admin|user). Invalid entry: {{ item }}
     that:
       - item.username is defined
       - item.username | length > 0
       - item.role is defined
       - item.role in ['admin', 'user']
-    fail_msg: >-
-      Each user requires username and role (admin|user). Invalid entry: {{ item }}
-  loop: "{{ _vault_users_config.users }}"
-  loop_control:
-    label: "{{ item.username | default('unknown') }}"
 
 - name: List Vault auth methods
   become: true
@@ -78,8 +78,8 @@
     argv: "{{ vault_cli.split() + ['auth', 'list', '-format', 'json'] }}"
 
 - name: Enable userpass auth method
-  become: true
   when: "'userpass/' not in (vault_auth_list_result.stdout | from_json)"
+  become: true
   register: vault_userpass_enable_result
   changed_when: vault_userpass_enable_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
@@ -114,6 +114,9 @@
     stdin: "{{ lookup('ansible.builtin.template', 'vault_user_policy.hcl.j2') }}"
 
 - name: Resolve userpass passwords
+  loop: "{{ _vault_users_config.users }}"
+  loop_control:
+    label: "{{ item.username }}"
   no_log: "{{ vault_no_log | default(true) }}"
   ansible.builtin.set_fact:
     _vault_userpass_resolved_users: >-
@@ -143,11 +146,11 @@
           }
         ]
       }}
-  loop: "{{ _vault_users_config.users }}"
-  loop_control:
-    label: "{{ item.username }}"
 
 - name: Create userpass users
+  loop: "{{ _vault_userpass_resolved_users }}"
+  loop_control:
+    label: "{{ item.username }}"
   become: true
   register: vault_userpass_user_result
   changed_when: vault_userpass_user_result.rc == 0
@@ -158,13 +161,13 @@
   ansible.builtin.command:
     argv: "{{ _vault_cli_stdin_argv + ['write', 'auth/userpass/users/' + item.username, '-'] }}"
     stdin: "{{ {'password': item.password, 'policies': item.policies | join(',')} | to_json }}"
+
+- name: Collect auto-generated userpass credentials
+  when: item.password_generated | bool
   loop: "{{ _vault_userpass_resolved_users }}"
   loop_control:
     label: "{{ item.username }}"
-
-- name: Collect auto-generated userpass credentials
   no_log: "{{ vault_no_log | default(true) }}"
-  when: item.password_generated | bool
   ansible.builtin.set_fact:
     _vault_userpass_generated_users: >-
       {{
@@ -176,13 +179,10 @@
           }
         ]
       }}
-  loop: "{{ _vault_userpass_resolved_users }}"
-  loop_control:
-    label: "{{ item.username }}"
 
 - name: Save generated userpass credentials
-  become: true
   when: (_vault_userpass_generated_users | default([]) | length) > 0
+  become: true
   no_log: "{{ vault_no_log | default(true) }}"
   ansible.builtin.copy:
     content: "{{ {'users': _vault_userpass_generated_users} | to_nice_json(indent=2) }}\n"

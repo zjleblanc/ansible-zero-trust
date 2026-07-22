@@ -19,9 +19,6 @@
   tasks:
     - name: Require generic_token from AAP OIDC credential injection
       ansible.builtin.assert:
-        that:
-          - generic_token is defined
-          - (generic_token | string | length) > 0
         fail_msg: >-
           generic_token is not set. Attach a HashiCorp Vault Secret Lookup
           (OIDC) credential (or a custom credential that injects
@@ -29,6 +26,9 @@
           to Vault with a job-scoped JWT and injects the looked-up secret
           as this variable.
         success_msg: generic_token was injected via AAP Vault OIDC auth
+        that:
+          - generic_token is defined
+          - (generic_token | string | length) > 0
 
     - name: Print generic_token (OIDC secret lookup succeeded)
       ansible.builtin.debug:

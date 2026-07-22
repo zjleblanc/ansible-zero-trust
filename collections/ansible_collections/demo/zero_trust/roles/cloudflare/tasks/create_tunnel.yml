@@ -4,25 +4,25 @@
 
 - name: Assert required tunnel variables
   ansible.builtin.assert:
+    fail_msg: >-
+      Set cloudflare_account_id and cloudflare_tunnel_name (inventory or playbook vars).
     that:
       - cloudflare_account_id is defined
       - cloudflare_account_id | length > 0
       - cloudflare_tunnel_name is defined
       - cloudflare_tunnel_name | length > 0
-    fail_msg: >-
-      Set cloudflare_account_id and cloudflare_tunnel_name (inventory or playbook vars).
 
 - name: List existing Cloudflare tunnels by name
   no_log: "{{ cloudflare_no_log | default(true) }}"
+  register: cloudflare_tunnel_list
   ansible.builtin.uri:
-    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel?name={{ cloudflare_tunnel_name | urlencode }}&is_deleted=false"
-    method: GET
     headers:
       Authorization: "Bearer {{ cloudflare_api_token }}"
       Content-Type: application/json
-    status_code: [200]
+    method: GET
     return_content: true
-  register: cloudflare_tunnel_list
+    status_code: [200]
+    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel?name={{ cloudflare_tunnel_name | urlencode }}&is_deleted=false"
 
 - name: Set fact for existing tunnel match
   no_log: "{{ cloudflare_no_log | default(true) }}"
@@ -38,51 +38,51 @@
 - name: Create Cloudflare tunnel
   when: (_cloudflare_existing_tunnel.id | default('') | length) == 0
   no_log: "{{ cloudflare_no_log | default(true) }}"
+  register: cloudflare_tunnel_create
   ansible.builtin.uri:
-    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel"
-    method: POST
-    headers:
-      Authorization: "Bearer {{ cloudflare_api_token }}"
-      Content-Type: application/json
-    body_format: json
     body:
       name: "{{ cloudflare_tunnel_name }}"
       config_src: "{{ cloudflare_tunnel_config_src }}"
-    status_code: [200]
+    body_format: json
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: application/json
+    method: POST
     return_content: true
-  register: cloudflare_tunnel_create
+    status_code: [200]
+    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel"
 
 - name: Set tunnel ID fact
   no_log: "{{ cloudflare_no_log | default(true) }}"
   ansible.builtin.set_fact:
+    cacheable: false
     cloudflare_tunnel_id: >-
       {{ cloudflare_tunnel_create.json.result.id
          if (cloudflare_tunnel_create is defined and not (cloudflare_tunnel_create.skipped | default(false)))
          else _cloudflare_existing_tunnel.id }}
-    cacheable: false
 
 - name: Retrieve Cloudflare tunnel connector token
   no_log: "{{ cloudflare_no_log | default(true) }}"
+  register: cloudflare_tunnel_token_resp
   ansible.builtin.uri:
-    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel/{{ cloudflare_tunnel_id }}/token"
-    method: GET
     headers:
       Authorization: "Bearer {{ cloudflare_api_token }}"
       Content-Type: application/json
-    status_code: [200]
+    method: GET
     return_content: true
-  register: cloudflare_tunnel_token_resp
+    status_code: [200]
+    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel/{{ cloudflare_tunnel_id }}/token"
 
 - name: Set tunnel token fact
   no_log: "{{ cloudflare_no_log | default(true) }}"
   ansible.builtin.set_fact:
-    cloudflare_tunnel_token: "{{ cloudflare_tunnel_token_resp.json.result }}"
     cacheable: false
+    cloudflare_tunnel_token: "{{ cloudflare_tunnel_token_resp.json.result }}"
 
 - name: Assert tunnel token was retrieved
   no_log: "{{ cloudflare_no_log | default(true) }}"
   ansible.builtin.assert:
+    fail_msg: Failed to retrieve Cloudflare tunnel connector token.
     that:
       - cloudflare_tunnel_token is defined
       - cloudflare_tunnel_token | length > 0
-    fail_msg: Failed to retrieve Cloudflare tunnel connector token.

@@ -19,6 +19,7 @@
       loop: "{{ cloudflare_tasks }}"
       loop_control:
         loop_var: function
+        label: "{{ function }}"
       ansible.builtin.include_role:
         name: demo.zero_trust.cloudflare
         tasks_from: "{{ function }}"

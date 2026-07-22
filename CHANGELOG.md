@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-22 — Apply preferred Ansible task key order across roles
+
+### Changed
+
+- Reordered vault and cloudflare role tasks and related playbooks to match `AGENTS.md` key order (`name`, `when`, `loop`, `loop_control`, misc, `vars`, then module)
+- Ordered module parameters with `name` / `description` / `state` first, then remaining keys alphabetically
+- Added missing `loop_control.label` values on loops that lacked them (no other functional changes)
+
 ## 2026-07-22 — Add Cloudflare Tunnel role and setup playbook
 
 ### Added
@@ -14,6 +22,12 @@
 ### Changed
 
 - Collection dependencies now include `community.general` (>=9.0.0) alongside `containers.podman`
+
+## 2026-07-22 — Document preferred Ansible task key order for agents
+
+### Added
+
+- Preferred key order guidance in `AGENTS.md` for Ansible tasks (name, when, loop, vars, module params)
 
 ## 2026-07-14 — Forward VAULT_TOKEN into Podman vault CLI
 

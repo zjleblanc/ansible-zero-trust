@@ -16,8 +16,8 @@
     _vault_sealed: "{{ (vault_status_preflight.stdout | from_json).sealed | bool }}"
 
 - name: Vault init
-  become: true
   when: not (_vault_initialized | bool)
+  become: true
   register: vault_init_result
   changed_when: vault_init_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
@@ -33,20 +33,20 @@
     vault_init_data: "{{ vault_init_result.stdout | from_json }}"
 
 - name: Save vault data
-  become: true
   when: not (_vault_initialized | bool)
+  become: true
   ansible.builtin.copy:
     content: "{{ vault_init_data | to_nice_json(indent=2) }}\n"
     dest: "{{ vault_storage_path }}/init_data.json"
     mode: "0600"
 
 - name: Load existing vault init data
-  become: true
   when: _vault_initialized | bool
+  become: true
   no_log: "{{ vault_no_log | default(true) }}"
+  register: vault_init_data_slurp
   ansible.builtin.slurp:
     src: "{{ vault_storage_path }}/init_data.json"
-  register: vault_init_data_slurp
 
 - name: Vault init data from saved file
   when: _vault_initialized | bool
@@ -64,9 +64,11 @@
     vault_token: "{{ vault_init_data.root_token }}"
 
 - name: Vault unseal
-  become: true
   when: _vault_sealed | bool
   loop: "{{ vault_init_data.unseal_keys_b64[:3] }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
   register: vault_unseal_result
   changed_when: vault_unseal_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
