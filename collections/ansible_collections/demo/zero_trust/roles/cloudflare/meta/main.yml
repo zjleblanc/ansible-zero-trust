@@ -4,7 +4,8 @@ galaxy_info:
   author: Zachary LeBlanc
   description: >-
     Create Cloudflare Tunnels, deploy cloudflared via Podman Quadlet,
-    configure public hostnames, and optionally secure them with Access policies
+    configure public hostnames, optionally secure them with Access policies,
+    and uninstall or destroy those resources
   license: GPL-3.0-or-later
   min_ansible_version: "2.14"
   platforms:

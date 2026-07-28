@@ -18,6 +18,11 @@ Typical setup sequence:
 3. `configure_hostnames` — PUT remote ingress config and create proxied CNAME records
 4. `configure_access` — create Access apps and policies (skipped when `cloudflare_access_policies` is empty)
 
+Typical uninstall sequence (independent entry points):
+
+1. `uninstall_podman` — stop the Quadlet service; remove the unit, container, Podman secret, and optionally the image
+2. `destroy_tunnel` — delete Access apps, DNS CNAME records, then soft-delete the tunnel via the Cloudflare API
+
 ## Requirements
 
 - Ansible 2.14+
@@ -76,6 +81,7 @@ cloudflare_tunnel_hostnames:
 | `cloudflare_container_image` | `docker.io/cloudflare/cloudflared:latest` | Container image |
 | `cloudflare_container_name` | `cloudflared` | Container / Quadlet unit name |
 | `cloudflare_podman_secret_name` | `cloudflare_tunnel_token` | Podman secret name for the tunnel token |
+| `cloudflare_uninstall_remove_image` | `true` | Remove the container image during `uninstall_podman` |
 
 ### Access defaults
 
@@ -151,6 +157,49 @@ Or with ansible-vault:
 
 ```bash
 ansible-playbook -i inventory/local.yml playbooks/pb_setup_cloudflare_tunnel.yml --ask-vault-pass
+```
+
+## Uninstall / Destroy
+
+Local host cleanup and remote Cloudflare API cleanup are separate entry points so you can run either independently.
+
+```yaml
+- name: Cloudflare Tunnel Uninstall
+  hosts: cloudflare
+  vars:
+    cloudflare_uninstall_tasks:
+      - uninstall_podman
+      - destroy_tunnel
+  tasks:
+    - name: Run demo.zero_trust.cloudflare
+      loop: "{{ cloudflare_uninstall_tasks }}"
+      loop_control:
+        loop_var: function
+      ansible.builtin.include_role:
+        name: demo.zero_trust.cloudflare
+        tasks_from: "{{ function }}"
+```
+
+`destroy_tunnel` looks up the tunnel by `cloudflare_tunnel_name`. When found it:
+
+1. Deletes Access applications matching `cloudflare_access_policies` hostnames (skipped when the list is empty)
+2. Deletes proxied CNAME records for `cloudflare_tunnel_hostnames` (requires `cloudflare_zone`; skipped when the list is empty)
+3. Soft-deletes the tunnel via `DELETE /accounts/{account_id}/cfd_tunnel/{tunnel_id}`
+
+If the tunnel is not found, remote cleanup is skipped (idempotent no-op).
+
+Override `cloudflare_uninstall_tasks` to run only one step, for example local cleanup only:
+
+```yaml
+cloudflare_uninstall_tasks:
+  - uninstall_podman
+```
+
+Playbook:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+ansible-playbook -i inventory/local.yml playbooks/pb_uninstall_cloudflare_tunnel.yml
 ```
 
 ## License

@@ -11,4 +11,5 @@
 - Add `vault` role `configure_kv_engine` entry point to enable KV v2 secrets engine and seed sample secrets for e2e testing
 - Make `init_vault` idempotent with preflight status check and saved-data reload
 - Add `cloudflare` role with `create_tunnel`, `install_podman`, `configure_hostnames`, and `configure_access` entry points
+- Add `cloudflare` role `uninstall_podman` and `destroy_tunnel` entry points for local connector cleanup and remote API teardown
 - Declare `community.general` dependency for `cloudflare_dns` CNAME management

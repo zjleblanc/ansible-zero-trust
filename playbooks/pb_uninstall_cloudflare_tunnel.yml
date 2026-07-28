@@ -1,0 +1,23 @@
+---
+- name: Cloudflare Tunnel Uninstall
+  hosts: "{{ _hosts | default(omit) }}"
+
+  vars:
+    cloudflare_uninstall_tasks:
+      - uninstall_podman
+      - destroy_tunnel
+
+  tasks:
+    - name: Load ansible-vault secrets when CLOUDFLARE_API_TOKEN is unset
+      when: lookup('ansible.builtin.env', 'CLOUDFLARE_API_TOKEN') | length == 0
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/vars/secrets.yml"
+
+    - name: "Run demo.zero_trust.cloudflare"
+      loop: "{{ cloudflare_uninstall_tasks }}"
+      loop_control:
+        loop_var: function
+        label: "{{ function }}"
+      ansible.builtin.include_role:
+        name: demo.zero_trust.cloudflare
+        tasks_from: "{{ function }}"

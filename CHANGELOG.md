@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-28 — Add Cloudflare tunnel uninstall and destroy support
+
+### Added
+
+- Cloudflare role `uninstall_podman` entry point to stop the Quadlet service and remove the unit, container, Podman secret, and optionally the image
+- Cloudflare role `destroy_tunnel` entry point to delete Access apps, DNS CNAME records, and soft-delete the tunnel via the Cloudflare API
+- End-to-end playbook `playbooks/pb_uninstall_cloudflare_tunnel.yml` with independent local and remote cleanup steps
+- Default `cloudflare_uninstall_remove_image` and argument specs for the new entry points
+
 ## 2026-07-22 — Apply preferred Ansible task key order across roles
 
 ### Changed

@@ -1,0 +1,45 @@
+---
+- name: Find existing Access application for hostname
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  ansible.builtin.set_fact:
+    _cloudflare_access_app: >-
+      {{ (cloudflare_access_apps_list.json.result | default([]))
+         | selectattr('domain', 'defined')
+         | selectattr('domain', 'equalto', cloudflare_access_policy.hostname)
+         | list
+         | first
+         | default({}, true) }}
+    cacheable: false
+
+- name: Delete Access application
+  when: (_cloudflare_access_app.id | default('') | length) > 0
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  register: cloudflare_access_app_delete
+  ansible.builtin.uri:
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: application/json
+    method: DELETE
+    return_content: true
+    status_code: [200]
+    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/access/apps/{{ _cloudflare_access_app.id }}"
+
+- name: Refresh Access applications list after delete
+  when: cloudflare_access_app_delete is defined and not (cloudflare_access_app_delete.skipped | default(false))
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  register: cloudflare_access_apps_list
+  ansible.builtin.uri:
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: application/json
+    method: GET
+    return_content: true
+    status_code: [200]
+    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/access/apps"
+
+- name: Skip Access application delete when not found
+  when: (_cloudflare_access_app.id | default('') | length) == 0
+  ansible.builtin.debug:
+    msg: >-
+      No Access application found for hostname
+      '{{ cloudflare_access_policy.hostname }}'; skipping.

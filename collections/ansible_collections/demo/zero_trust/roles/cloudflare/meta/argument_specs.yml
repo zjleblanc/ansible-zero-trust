@@ -131,3 +131,78 @@ argument_specs:
         required: false
         default: true
         description: Suppress sensitive task output
+
+  uninstall_podman:
+    short_description: Stop and remove the cloudflared Quadlet unit, container, secret, and optionally the image
+    options:
+      cloudflare_container_image:
+        type: str
+        required: true
+        description: Container image reference to remove when cloudflare_uninstall_remove_image is true
+      cloudflare_container_name:
+        type: str
+        required: true
+        description: Podman container / Quadlet unit name (used for detection and cleanup)
+      cloudflare_podman_secret_name:
+        type: str
+        required: false
+        default: cloudflare_tunnel_token
+        description: Name of the Podman secret storing the tunnel token
+      cloudflare_uninstall_remove_image:
+        type: bool
+        required: false
+        default: true
+        description: Whether to remove the cloudflared container image during uninstall
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+
+  destroy_tunnel:
+    short_description: Delete Access apps, DNS CNAME records, and the Cloudflare Tunnel via API
+    options:
+      cloudflare_api_token:
+        type: str
+        required: false
+        description: >-
+          Cloudflare API token. Prefer CLOUDFLARE_API_TOKEN env var; falls back
+          to this variable (e.g. from ansible-vault encrypted secrets).
+      cloudflare_account_id:
+        type: str
+        required: true
+        description: Cloudflare account ID
+      cloudflare_tunnel_name:
+        type: str
+        required: true
+        description: Human-readable tunnel name to look up and delete
+      cloudflare_zone:
+        type: str
+        required: false
+        description: DNS zone domain name (required when cloudflare_tunnel_hostnames is non-empty)
+      cloudflare_tunnel_hostnames:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: >-
+          Public hostname definitions whose CNAME records should be removed.
+          Each entry requires hostname.
+      cloudflare_access_policies:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: >-
+          Access policies whose applications should be deleted. Matching is by
+          hostname. When empty, Access cleanup is skipped.
+      cloudflare_api_base:
+        type: str
+        required: false
+        default: https://api.cloudflare.com/client/v4
+        description: Cloudflare API base URL
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output

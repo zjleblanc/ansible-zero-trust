@@ -1,0 +1,56 @@
+---
+- name: Check if cloudflared Quadlet unit exists
+  become: true
+  register: cloudflare_quadlet_unit
+  ansible.builtin.stat:
+    path: "/etc/containers/systemd/{{ cloudflare_container_name }}.container"
+
+- name: Set cloudflared install fact
+  ansible.builtin.set_fact:
+    _cloudflare_podman_installed: "{{ cloudflare_quadlet_unit.stat.exists | default(false) }}"
+    cacheable: false
+
+- name: Stop and disable cloudflared Quadlet service
+  when: _cloudflare_podman_installed | bool
+  become: true
+  failed_when: false
+  ansible.builtin.systemd:
+    name: "{{ cloudflare_container_name }}.service"
+    state: stopped
+    enabled: false
+
+- name: Remove cloudflared Quadlet unit
+  when: _cloudflare_podman_installed | bool
+  become: true
+  ansible.builtin.file:
+    state: absent
+    path: "/etc/containers/systemd/{{ cloudflare_container_name }}.container"
+
+- name: Reload systemd after removing Quadlet unit
+  when: _cloudflare_podman_installed | bool
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Remove cloudflared container
+  become: true
+  failed_when: false
+  containers.podman.podman_container:
+    name: "{{ cloudflare_container_name }}"
+    state: absent
+
+- name: Remove cloudflared Podman secret
+  become: true
+  failed_when: false
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  containers.podman.podman_secret:
+    name: "{{ cloudflare_podman_secret_name }}"
+    state: absent
+
+- name: Remove cloudflared container image
+  when: cloudflare_uninstall_remove_image | bool
+  become: true
+  failed_when: false
+  containers.podman.podman_image:
+    name: "{{ cloudflare_container_image }}"
+    state: absent
