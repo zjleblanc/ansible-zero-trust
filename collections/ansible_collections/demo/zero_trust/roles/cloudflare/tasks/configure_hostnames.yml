@@ -18,36 +18,8 @@
       - cloudflare_tunnel_hostnames | length > 0
 
 - name: Build tunnel ingress rules from hostnames
-  loop: "{{ cloudflare_tunnel_hostnames }}"
-  loop_control:
-    label: "{{ item.hostname }}"
-  vars:
-    _cloudflare_ingress_item: >-
-      {{
-        {
-          'hostname': item.hostname,
-          'service': item.service
-        }
-        | combine(
-            {'path': item.path} if (item.path | default('') | length > 0) else {}
-          )
-        | combine(
-            {
-              'originRequest': {
-                'noTLSVerify': item.no_tls_verify | default(false) | bool
-              }
-            }
-            if (item.no_tls_verify is defined)
-            else {}
-          )
-      }}
   ansible.builtin.set_fact:
-    _cloudflare_ingress_rules: "{{ _cloudflare_ingress_rules | default([]) + [_cloudflare_ingress_item] }}"
-    cacheable: false
-
-- name: Append catch-all ingress rule
-  ansible.builtin.set_fact:
-    _cloudflare_ingress_rules: "{{ _cloudflare_ingress_rules + [{'service': 'http_status:404'}] }}"
+    _cloudflare_ingress_rules: "{{ lookup('ansible.builtin.template', 'tunnel_ingress.json.j2') | from_json }}"
     cacheable: false
 
 - name: Put Cloudflare tunnel configuration

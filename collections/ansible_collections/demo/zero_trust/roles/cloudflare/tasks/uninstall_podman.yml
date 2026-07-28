@@ -1,9 +1,32 @@
 ---
+- name: Look up rootless Podman user account details
+  when: cloudflare_podman_rootless | bool
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ cloudflare_podman_user }}"
+
+- name: Set Podman privilege and path facts
+  vars:
+    _rootless: "{{ cloudflare_podman_rootless | bool }}"
+  ansible.builtin.set_fact:
+    # Always become, then drop to cloudflare_podman_user when rootless (become_user
+    # is ignored when become is false). Use | bool — Jinja "{{ false }}" can stringify.
+    _cloudflare_podman_become: true
+    _cloudflare_podman_become_user: "{{ cloudflare_podman_user if (_rootless | bool) else '' }}"
+    _cloudflare_podman_systemd_scope: "{{ 'user' if (_rootless | bool) else 'system' }}"
+    _cloudflare_podman_quadlet_dir: >-
+      {{ (ansible_facts.getent_passwd[cloudflare_podman_user][4] + '/.config/containers/systemd')
+         if (_rootless | bool) else '/etc/containers/systemd' }}
+    _cloudflare_podman_environment: >-
+      {{ {'XDG_RUNTIME_DIR': '/run/user/' + ansible_facts.getent_passwd[cloudflare_podman_user][1]}
+         if (_rootless | bool) else {} }}
+
 - name: Check if cloudflared Quadlet unit exists
-  become: true
+  become: "{{ _cloudflare_podman_become }}"
+  become_user: "{{ _cloudflare_podman_become_user if (_cloudflare_podman_become_user | length > 0) else omit }}"
   register: cloudflare_quadlet_unit
   ansible.builtin.stat:
-    path: "/etc/containers/systemd/{{ cloudflare_container_name }}.container"
+    path: "{{ _cloudflare_podman_quadlet_dir }}/{{ cloudflare_container_name }}.container"
 
 - name: Set cloudflared install fact
   ansible.builtin.set_fact:
@@ -12,45 +35,68 @@
 
 - name: Stop and disable cloudflared Quadlet service
   when: _cloudflare_podman_installed | bool
-  become: true
+  become: "{{ _cloudflare_podman_become }}"
+  become_user: "{{ _cloudflare_podman_become_user if (_cloudflare_podman_become_user | length > 0) else omit }}"
   failed_when: false
+  environment: "{{ _cloudflare_podman_environment }}"
   ansible.builtin.systemd:
     name: "{{ cloudflare_container_name }}.service"
+    scope: "{{ _cloudflare_podman_systemd_scope }}"
     state: stopped
     enabled: false
 
 - name: Remove cloudflared Quadlet unit
   when: _cloudflare_podman_installed | bool
-  become: true
+  become: "{{ _cloudflare_podman_become }}"
+  become_user: "{{ _cloudflare_podman_become_user if (_cloudflare_podman_become_user | length > 0) else omit }}"
   ansible.builtin.file:
     state: absent
-    path: "/etc/containers/systemd/{{ cloudflare_container_name }}.container"
+    path: "{{ _cloudflare_podman_quadlet_dir }}/{{ cloudflare_container_name }}.container"
 
 - name: Reload systemd after removing Quadlet unit
   when: _cloudflare_podman_installed | bool
-  become: true
+  become: "{{ _cloudflare_podman_become }}"
+  become_user: "{{ _cloudflare_podman_become_user if (_cloudflare_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _cloudflare_podman_environment }}"
   ansible.builtin.systemd:
     daemon_reload: true
+    scope: "{{ _cloudflare_podman_systemd_scope }}"
 
 - name: Remove cloudflared container
-  become: true
+  become: "{{ _cloudflare_podman_become }}"
+  become_user: "{{ _cloudflare_podman_become_user if (_cloudflare_podman_become_user | length > 0) else omit }}"
   failed_when: false
+  environment: "{{ _cloudflare_podman_environment }}"
   containers.podman.podman_container:
     name: "{{ cloudflare_container_name }}"
     state: absent
 
 - name: Remove cloudflared Podman secret
-  become: true
+  become: "{{ _cloudflare_podman_become }}"
+  become_user: "{{ _cloudflare_podman_become_user if (_cloudflare_podman_become_user | length > 0) else omit }}"
   failed_when: false
   no_log: "{{ cloudflare_no_log | default(true) }}"
+  environment: "{{ _cloudflare_podman_environment }}"
   containers.podman.podman_secret:
     name: "{{ cloudflare_podman_secret_name }}"
     state: absent
 
 - name: Remove cloudflared container image
   when: cloudflare_uninstall_remove_image | bool
-  become: true
+  become: "{{ _cloudflare_podman_become }}"
+  become_user: "{{ _cloudflare_podman_become_user if (_cloudflare_podman_become_user | length > 0) else omit }}"
   failed_when: false
+  environment: "{{ _cloudflare_podman_environment }}"
   containers.podman.podman_image:
     name: "{{ cloudflare_container_image }}"
+    state: absent
+
+- name: Remove Podman network
+  when: cloudflare_podman_network | length > 0
+  become: "{{ _cloudflare_podman_become }}"
+  become_user: "{{ _cloudflare_podman_become_user if (_cloudflare_podman_become_user | length > 0) else omit }}"
+  failed_when: false
+  environment: "{{ _cloudflare_podman_environment }}"
+  containers.podman.podman_network:
+    name: "{{ cloudflare_podman_network }}"
     state: absent

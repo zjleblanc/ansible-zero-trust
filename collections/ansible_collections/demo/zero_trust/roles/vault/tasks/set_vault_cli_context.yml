@@ -1,0 +1,21 @@
+---
+# Privilege context for vault_cli invocations.
+# Rootless Podman: become the Podman user so `podman exec` sees that user's containers.
+# Rootful Podman / RPM: become root.
+- name: Look up rootless Podman user for vault CLI
+  when:
+    - vault_cli is match('^podman\\s+exec\\b')
+    - vault_podman_rootless | bool
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ vault_podman_user }}"
+
+- name: Set vault CLI privilege context
+  vars:
+    _rootless_cli: "{{ (vault_cli is match('^podman\\s+exec\\b')) and (vault_podman_rootless | bool) }}"
+  ansible.builtin.set_fact:
+    _vault_cli_become: true
+    _vault_cli_become_user: "{{ vault_podman_user if (_rootless_cli | bool) else '' }}"
+    _vault_cli_environment: >-
+      {{ {'XDG_RUNTIME_DIR': '/run/user/' + ansible_facts.getent_passwd[vault_podman_user][1]}
+         if (_rootless_cli | bool) else {} }}

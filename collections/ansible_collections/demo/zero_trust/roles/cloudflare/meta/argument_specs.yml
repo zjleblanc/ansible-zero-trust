@@ -54,6 +54,26 @@ argument_specs:
         required: false
         default: cloudflare_tunnel_token
         description: Name of the Podman secret storing the tunnel token
+      cloudflare_podman_network:
+        type: str
+        required: false
+        default: ""
+        description: >-
+          Podman network to join (e.g. shared with demo.zero_trust.vault so cloudflared
+          can reach origin services by container name); empty disables custom networking
+      cloudflare_podman_rootless:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          Run cloudflared as a rootless Podman Quadlet under cloudflare_podman_user (default).
+          Set false for a system-wide rootful Quadlet.
+      cloudflare_podman_user:
+        type: str
+        required: false
+        description: >-
+          User account that owns the rootless Podman Quadlet when cloudflare_podman_rootless
+          is true (defaults to ansible_user)
       cloudflare_no_log:
         type: bool
         required: false
@@ -87,7 +107,9 @@ argument_specs:
         required: true
         description: >-
           Public hostname definitions. Each entry requires hostname and service;
-          optional path and no_tls_verify.
+          optional path, no_tls_verify (shorthand for originRequest.noTLSVerify),
+          and originRequest (native Cloudflare originRequest object; merged with
+          no_tls_verify when both are set).
       cloudflare_api_base:
         type: str
         required: false
@@ -153,6 +175,22 @@ argument_specs:
         required: false
         default: true
         description: Whether to remove the cloudflared container image during uninstall
+      cloudflare_podman_network:
+        type: str
+        required: false
+        default: ""
+        description: Podman network to remove during cleanup; empty skips network removal
+      cloudflare_podman_rootless:
+        type: bool
+        required: false
+        default: true
+        description: Whether cloudflared was deployed as a rootless Podman Quadlet (must match install-time value)
+      cloudflare_podman_user:
+        type: str
+        required: false
+        description: >-
+          User account that owns the rootless Podman Quadlet when cloudflare_podman_rootless
+          is true (defaults to ansible_user)
       cloudflare_no_log:
         type: bool
         required: false

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-07-28 — Add Podman network and rootless Quadlet support
+
+### Added
+
+- Optional shared Podman network vars (`vault_podman_network`, `cloudflare_podman_network`) so Vault and cloudflared can reach each other by container name
+- Rootless Podman Quadlet support for vault and cloudflare (`*_podman_rootless` defaults to `true`, `*_podman_user` defaults to `ansible_user`) with linger setup and user-scoped systemd
+- Vault rootless `UserNS=keep-id` so host-owned volumes remain writable to the container vault user
+- Shared `set_vault_cli_context` helper so init/configure tasks run `podman exec` as the rootless Podman user
+- Cloudflare tunnel ingress Jinja template (`tunnel_ingress.json.j2`) that emits valid JSON, including custom `originRequest` merged with `no_tls_verify`
+
+### Changed
+
+- Vault and cloudflare install/uninstall paths use computed become/`become_user`/systemd scope for rootful vs rootless deployments
+- `configure_hostnames` builds ingress rules via `lookup('ansible.builtin.template')` instead of inline set_fact loops
+
+### Fixed
+
+- Rootless Vault CLI tasks no longer run `podman exec` as root (which could not see the user container)
+- Custom `originRequest` settings from inventory are preserved in tunnel ingress configuration
+- Prefer `ansible_facts.getent_passwd` over deprecated top-level `getent_passwd` injection
+
 ## 2026-07-28 — Add Cloudflare tunnel uninstall and destroy support
 
 ### Added

@@ -11,11 +11,34 @@
       - -q
       - vault
 
+- name: Look up rootless Podman user account details
+  when: vault_podman_rootless | bool
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ vault_podman_user }}"
+
+- name: Set Podman privilege and path facts
+  vars:
+    _rootless: "{{ vault_podman_rootless | bool }}"
+  ansible.builtin.set_fact:
+    # Always become, then drop to vault_podman_user when rootless (become_user is
+    # ignored when become is false). Use | bool — Jinja "{{ false }}" can stringify.
+    _vault_podman_become: true
+    _vault_podman_become_user: "{{ vault_podman_user if (_rootless | bool) else '' }}"
+    _vault_podman_systemd_scope: "{{ 'user' if (_rootless | bool) else 'system' }}"
+    _vault_podman_quadlet_dir: >-
+      {{ (ansible_facts.getent_passwd[vault_podman_user][4] + '/.config/containers/systemd')
+         if (_rootless | bool) else '/etc/containers/systemd' }}
+    _vault_podman_environment: >-
+      {{ {'XDG_RUNTIME_DIR': '/run/user/' + ansible_facts.getent_passwd[vault_podman_user][1]}
+         if (_rootless | bool) else {} }}
+
 - name: Check if Vault Quadlet unit exists
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
   register: vault_quadlet_unit
   ansible.builtin.stat:
-    path: "/etc/containers/systemd/{{ vault_container_name }}.container"
+    path: "{{ _vault_podman_quadlet_dir }}/{{ vault_container_name }}.container"
 
 - name: Set installation type facts
   ansible.builtin.set_fact:
@@ -55,22 +78,28 @@
 # Podman uninstall path
 - name: Stop and disable Vault Quadlet service
   when: _vault_podman_installed | bool
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
   failed_when: false
+  environment: "{{ _vault_podman_environment }}"
   ansible.builtin.systemd:
     name: "{{ vault_container_name }}.service"
+    scope: "{{ _vault_podman_systemd_scope }}"
     state: stopped
     enabled: false
 
 - name: Remove Vault Quadlet unit
   when: _vault_podman_installed | bool
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
   ansible.builtin.file:
     state: absent
-    path: "/etc/containers/systemd/{{ vault_container_name }}.container"
+    path: "{{ _vault_podman_quadlet_dir }}/{{ vault_container_name }}.container"
 
 - name: Remove legacy podman generate-systemd unit if present
-  when: _vault_podman_installed | bool
+  when:
+    - _vault_podman_installed | bool
+    - not (vault_podman_rootless | bool)
   become: true
   ansible.builtin.file:
     state: absent
@@ -78,22 +107,41 @@
 
 - name: Reload systemd after removing Quadlet unit
   when: _vault_podman_installed | bool
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _vault_podman_environment }}"
   ansible.builtin.systemd:
     daemon_reload: true
+    scope: "{{ _vault_podman_systemd_scope }}"
 
 - name: Remove Vault container
   when: _vault_podman_installed | bool
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _vault_podman_environment }}"
   containers.podman.podman_container:
     name: "{{ vault_container_name }}"
     state: absent
 
 - name: Remove Vault container image
   when: _vault_podman_installed | bool
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _vault_podman_environment }}"
   containers.podman.podman_image:
     name: "{{ vault_container_image }}"
+    state: absent
+
+- name: Remove Podman network
+  when:
+    - _vault_podman_installed | bool
+    - vault_podman_network | length > 0
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  failed_when: false
+  environment: "{{ _vault_podman_environment }}"
+  containers.podman.podman_network:
+    name: "{{ vault_podman_network }}"
     state: absent
 
 # Common cleanup

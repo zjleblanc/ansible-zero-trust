@@ -30,6 +30,21 @@ Uninstall with `uninstall` (detects RPM or Podman and removes artifacts).
 - For `install_podman` / Podman uninstall: Podman with systemd Quadlet support; `containers.podman` collection
 - For TLS: certificate and key available on the controller (and/or already on the host)
 - For `configure_jwt_auth`: AAP OIDC discovery URL (`vault_jwt_oidc_discovery_url`)
+- For rootless `install_podman` / uninstall: `loginctl`/`systemd-logind` on the target (used to enable lingering for `vault_podman_user`)
+
+## Rootful vs. Rootless Podman
+
+By default (`vault_podman_rootless: true`), Vault runs as a **rootless** Podman Quadlet owned by `vault_podman_user` (defaults to `ansible_user`). Setting `vault_podman_rootless: false` switches to a **rootful** Quadlet under `/etc/containers/systemd/` managed at the `system` scope:
+
+| Concern | Rootless (default) | Rootful |
+| --- | --- | --- |
+| Quadlet path | `~{{ vault_podman_user }}/.config/containers/systemd/` | `/etc/containers/systemd/` |
+| systemd scope | `user` (requires `loginctl enable-linger`, handled automatically) | `system` |
+| User namespace | `UserNS=keep-id` maps container uid/gid 100 to `vault_podman_user` so host volumes are writable | default mapping; host dirs owned by uid/gid 100 |
+| `AddCapability=IPC_LOCK` | omitted (Vault already runs with `disable_mlock = true`, so this is safe) | set |
+| `[Install] WantedBy` | `default.target` | `multi-user.target default.target` |
+
+`uninstall` detects and removes the Quadlet unit in the same location `install_podman` would have used, so `vault_podman_rootless` and `vault_podman_user` must be set the same way for both install and uninstall.
 
 ## Role Variables
 
@@ -59,6 +74,9 @@ Defaults live in `defaults/main/` (split by concern). Entry-point requirements a
 | `vault_container_storage_path` | `/vault/data` | In-container path for Vault file storage |
 | `vault_container_config_path` | `/vault/config` | In-container path for Vault configuration |
 | `vault_container_tls_dir` | `/vault/tls` | In-container directory for TLS material |
+| `vault_podman_network` | `""` | Podman network to join (e.g. shared with `demo.zero_trust.cloudflare`); empty disables custom networking |
+| `vault_podman_rootless` | `true` | Run Vault as a rootless Podman Quadlet under `vault_podman_user` (set `false` for rootful) |
+| `vault_podman_user` | `{{ ansible_user }}` | User account that owns the rootless Podman Quadlet when `vault_podman_rootless` is true |
 
 Variables without defaults (set in inventory/playbook as needed):
 
@@ -276,6 +294,9 @@ Install Vault via Podman Quadlet.
 | `vault_registry` | `str` | no | — | Container registry hostname for authenticated pulls |
 | `vault_registry_username` | `str` | no | — | Username for container registry authentication |
 | `vault_registry_password` | `str` | no | — | Password for container registry authentication |
+| `vault_podman_network` | `str` | no | `""` | Podman network to join; empty disables custom networking |
+| `vault_podman_rootless` | `bool` | no | `true` | Run Vault as a rootless Podman Quadlet under `vault_podman_user` (set `false` for rootful) |
+| `vault_podman_user` | `str` | no | `ansible_user` | User account that owns the rootless Podman Quadlet when `vault_podman_rootless` is true |
 
 If either registry username or password is set, both must be provided (and optionally `vault_registry`). Sets `vault_cli` and `vault_cli_addr` for subsequent entry points.
 
@@ -287,6 +308,28 @@ If either registry username or password is set, both must be provided (and optio
   vars:
     vault_registry_username: "{{ vault_pull_user }}"
     vault_registry_password: "{{ vault_pull_password }}"
+```
+
+To share a Podman network with `demo.zero_trust.cloudflare` so cloudflared can reach Vault by container name (see the [cloudflare role README](../cloudflare/README.md) for the tunnel side):
+
+```yaml
+- name: Install Vault via Podman on a shared network
+  ansible.builtin.include_role:
+    name: demo.zero_trust.vault
+    tasks_from: install_podman
+  vars:
+    vault_podman_network: zt-network
+```
+
+Rootless is the default. To force a rootful (system-wide) Quadlet:
+
+```yaml
+- name: Install Vault via rootful Podman
+  ansible.builtin.include_role:
+    name: demo.zero_trust.vault
+    tasks_from: install_podman
+  vars:
+    vault_podman_rootless: false
 ```
 
 ### `init_vault`
@@ -403,6 +446,9 @@ Detect install type (RPM and/or Podman) and remove Vault services, packages/imag
 | `vault_config_path` | `path` | yes | `/opt/vault/config` | Host config directory to remove |
 | `vault_container_name` | `str` | yes | `vault` | Quadlet/container name for detection and cleanup |
 | `vault_container_image` | `str` | yes | see defaults | Container image to remove when Podman install is detected |
+| `vault_podman_network` | `str` | no | `""` | Podman network to remove during cleanup; empty skips network removal |
+| `vault_podman_rootless` | `bool` | no | `true` | Whether Vault was deployed as a rootless Podman Quadlet (must match install-time value) |
+| `vault_podman_user` | `str` | no | `ansible_user` | User account that owns the rootless Podman Quadlet when `vault_podman_rootless` is true |
 
 ```yaml
 - name: Uninstall Vault

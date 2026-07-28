@@ -1,0 +1,27 @@
+{#
+  Cloudflare tunnel ingress rules as a JSON array.
+  Hostname entries may include:
+    - hostname, service (required)
+    - path (optional)
+    - no_tls_verify (optional shorthand for originRequest.noTLSVerify)
+    - originRequest (optional native Cloudflare object; merged with no_tls_verify)
+#}
+[
+{% for item in cloudflare_tunnel_hostnames %}
+{% set origin_request = (item.originRequest | default({}))
+     | combine(
+         {'noTLSVerify': item.no_tls_verify | bool}
+         if (item.no_tls_verify is defined)
+         else {}
+       ) %}
+  {
+    "hostname": {{ item.hostname | to_json }},
+    "service": {{ item.service | to_json }}{% if item.path | default('') | length > 0 %},
+    "path": {{ item.path | to_json }}{% endif %}{% if origin_request | length > 0 %},
+    "originRequest": {{ origin_request | to_json }}{% endif %}
+  },
+{% endfor %}
+  {
+    "service": "http_status:404"
+  }
+]

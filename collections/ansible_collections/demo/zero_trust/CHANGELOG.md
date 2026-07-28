@@ -13,3 +13,5 @@
 - Add `cloudflare` role with `create_tunnel`, `install_podman`, `configure_hostnames`, and `configure_access` entry points
 - Add `cloudflare` role `uninstall_podman` and `destroy_tunnel` entry points for local connector cleanup and remote API teardown
 - Declare `community.general` dependency for `cloudflare_dns` CNAME management
+- Add optional shared Podman networks and rootless Quadlet support (default) for `vault` and `cloudflare`
+- Preserve custom Cloudflare tunnel `originRequest` settings when configuring hostnames

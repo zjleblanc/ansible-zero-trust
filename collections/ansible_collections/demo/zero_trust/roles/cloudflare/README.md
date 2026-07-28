@@ -30,6 +30,34 @@ Typical uninstall sequence (independent entry points):
 - Collections: `containers.podman`, `community.general`
 - Cloudflare API token with Tunnel Edit, DNS Edit, and (optionally) Access Apps and Policies Edit
 - For `install_podman`: Podman with systemd Quadlet support
+- For rootless `install_podman` / `uninstall_podman`: `loginctl`/`systemd-logind` on the target (used to enable lingering for `cloudflare_podman_user`)
+
+## Rootful vs. Rootless Podman
+
+By default (`cloudflare_podman_rootless: true`), cloudflared runs as a **rootless** Podman Quadlet owned by `cloudflare_podman_user` (defaults to `ansible_user`). Setting `cloudflare_podman_rootless: false` switches to a **rootful** Quadlet under `/etc/containers/systemd/` managed at the `system` scope:
+
+| Concern | Rootless (default) | Rootful |
+| --- | --- | --- |
+| Quadlet path | `~{{ cloudflare_podman_user }}/.config/containers/systemd/` | `/etc/containers/systemd/` |
+| systemd scope | `user` (requires `loginctl enable-linger`, handled automatically) | `system` |
+| `[Install] WantedBy` | `default.target` | `multi-user.target default.target` |
+
+`uninstall_podman` detects and removes the Quadlet unit in the same location `install_podman` would have used, so `cloudflare_podman_rootless` and `cloudflare_podman_user` must be set the same way for both install and uninstall.
+
+## Podman Networking
+
+Set `cloudflare_podman_network` to join cloudflared to a named Podman network (created automatically if it does not exist). This is useful for reaching other containers — such as `demo.zero_trust.vault` — by container name instead of `127.0.0.1`, which resolves to the cloudflared container's own loopback (not the host) on the default bridge network:
+
+```yaml
+cloudflare_podman_network: zt-network
+
+cloudflare_tunnel_hostnames:
+  - hostname: vault.example.com
+    service: https://vault:8200
+    no_tls_verify: true
+```
+
+For this to work, deploy Vault with the same network name (`vault_podman_network: zt-network`) so both containers join it.
 
 ## Security
 
@@ -71,7 +99,9 @@ cloudflare_tunnel_hostnames:
   - hostname: api.example.com
     service: https://127.0.0.1:3000
     path: ""              # optional
-    no_tls_verify: false  # optional origin TLS setting
+    no_tls_verify: false  # optional shorthand for originRequest.noTLSVerify
+    originRequest:        # optional native Cloudflare originRequest object (merged with no_tls_verify)
+      originServerName: api.example.com
 ```
 
 ### Podman defaults
@@ -82,6 +112,9 @@ cloudflare_tunnel_hostnames:
 | `cloudflare_container_name` | `cloudflared` | Container / Quadlet unit name |
 | `cloudflare_podman_secret_name` | `cloudflare_tunnel_token` | Podman secret name for the tunnel token |
 | `cloudflare_uninstall_remove_image` | `true` | Remove the container image during `uninstall_podman` |
+| `cloudflare_podman_network` | `""` | Podman network to join (e.g. shared with `demo.zero_trust.vault`); empty disables custom networking |
+| `cloudflare_podman_rootless` | `true` | Run cloudflared as a rootless Podman Quadlet under `cloudflare_podman_user` (set `false` for rootful) |
+| `cloudflare_podman_user` | `{{ ansible_user }}` | User account that owns the rootless Podman Quadlet when `cloudflare_podman_rootless` is true |
 
 ### Access defaults
 

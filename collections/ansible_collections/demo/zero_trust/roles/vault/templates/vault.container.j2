@@ -11,7 +11,15 @@ PublishPort={{ vault_port }}:{{ vault_port }}
 Volume={{ vault_storage_path }}:{{ vault_container_storage_path }}:Z
 Volume={{ vault_config_path }}:{{ vault_container_config_path }}:Z
 Volume={{ vault_tls_cert_dest | dirname }}:{{ vault_container_tls_dir }}:Z
+{% if vault_podman_network | length > 0 %}
+Network={{ vault_podman_network }}
+{% endif %}
+{% if vault_podman_rootless | bool %}
+# Map container vault uid/gid to the rootless host user so host-owned volumes are writable.
+UserNS=keep-id:uid={{ vault_container_uid }},gid={{ vault_container_gid }}
+{% else %}
 AddCapability=IPC_LOCK
+{% endif %}
 # Image entrypoint already injects -config=/vault/config (loads all files there).
 # Do not pass -config again or the listener binds twice ("address already in use").
 Exec=server
@@ -21,4 +29,8 @@ Restart=always
 TimeoutStartSec=120
 
 [Install]
+{% if vault_podman_rootless | bool %}
+WantedBy=default.target
+{% else %}
 WantedBy=multi-user.target default.target
+{% endif %}

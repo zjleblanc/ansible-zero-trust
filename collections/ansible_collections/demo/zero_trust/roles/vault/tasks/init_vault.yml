@@ -1,12 +1,19 @@
 ---
+- name: Resolve vault CLI privilege context
+  ansible.builtin.include_tasks: set_vault_cli_context.yml
+
 - name: Vault status (preflight)
-  become: true
+  # rc 0 = initialized+unsealed, rc 2 = sealed/uninitialized but API up.
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_status_preflight
+  until: vault_status_preflight.rc in [0, 2]
+  retries: 3
+  delay: 2
   changed_when: false
   failed_when: vault_status_preflight.rc not in [0, 2]
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr}) }}"
   ansible.builtin.command:
     argv: "{{ vault_cli.split() + ['status', '-format', 'json'] }}"
 
@@ -17,12 +24,12 @@
 
 - name: Vault init
   when: not (_vault_initialized | bool)
-  become: true
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_init_result
   changed_when: vault_init_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr}) }}"
   ansible.builtin.command:
     argv: "{{ vault_cli.split() + ['operator', 'init', '-format', 'json'] }}"
 
@@ -68,23 +75,23 @@
   loop: "{{ vault_init_data.unseal_keys_b64[:3] }}"
   loop_control:
     label: "{{ item }}"
-  become: true
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_unseal_result
   changed_when: vault_unseal_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr}) }}"
   ansible.builtin.command:
     argv: "{{ vault_cli.split() + ['operator', 'unseal', '-format', 'json', item] }}"
 
 - name: Vault status
-  become: true
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_status_result
   changed_when: false
   failed_when: vault_status_result.rc not in [0, 2]
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr}) }}"
   ansible.builtin.command:
     argv: "{{ vault_cli.split() + ['status', '-format', 'json'] }}"
 

@@ -9,6 +9,9 @@ Image={{ cloudflare_container_image }}
 ContainerName={{ cloudflare_container_name }}
 # Tunnel token is injected from the Podman secret store — never written to this unit file.
 Secret={{ cloudflare_podman_secret_name }},type=env,target=TUNNEL_TOKEN
+{% if cloudflare_podman_network | length > 0 %}
+Network={{ cloudflare_podman_network }}
+{% endif %}
 Exec=tunnel --no-autoupdate run
 
 [Service]
@@ -16,4 +19,8 @@ Restart=always
 TimeoutStartSec=120
 
 [Install]
+{% if cloudflare_podman_rootless | bool %}
+WantedBy=default.target
+{% else %}
 WantedBy=multi-user.target default.target
+{% endif %}

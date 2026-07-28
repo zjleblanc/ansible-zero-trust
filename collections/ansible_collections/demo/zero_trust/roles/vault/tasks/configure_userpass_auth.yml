@@ -36,6 +36,9 @@
       - vault_token is defined
       - vault_token | length > 0
 
+- name: Resolve vault CLI privilege context
+  ansible.builtin.include_tasks: set_vault_cli_context.yml
+
 - name: Resolve Vault CLI for stdin writes
   ansible.builtin.set_fact:
     _vault_cli_stdin_argv: "{{ (vault_cli.split()[:2] + ['-i'] + vault_cli.split()[2:]) if (vault_cli is match('^podman\\s+exec\\b')) else vault_cli.split() }}"
@@ -66,49 +69,45 @@
       - item.role in ['admin', 'user']
 
 - name: List Vault auth methods
-  become: true
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_auth_list_result
   changed_when: false
   failed_when: vault_auth_list_result.rc != 0
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
-    VAULT_TOKEN: "{{ vault_token }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr, 'VAULT_TOKEN': vault_token}) }}"
   ansible.builtin.command:
     argv: "{{ vault_cli.split() + ['auth', 'list', '-format', 'json'] }}"
 
 - name: Enable userpass auth method
   when: "'userpass/' not in (vault_auth_list_result.stdout | from_json)"
-  become: true
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_userpass_enable_result
   changed_when: vault_userpass_enable_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
-    VAULT_TOKEN: "{{ vault_token }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr, 'VAULT_TOKEN': vault_token}) }}"
   ansible.builtin.command:
     argv: "{{ vault_cli.split() + ['auth', 'enable', 'userpass'] }}"
 
 - name: Write admin Vault policy
-  become: true
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_admin_policy_result
   changed_when: vault_admin_policy_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
-    VAULT_TOKEN: "{{ vault_token }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr, 'VAULT_TOKEN': vault_token}) }}"
   ansible.builtin.command:
     argv: "{{ _vault_cli_stdin_argv + ['policy', 'write', vault_userpass_admin_policy_name, '-'] }}"
     stdin: "{{ lookup('ansible.builtin.template', 'vault_admin_policy.hcl.j2') }}"
 
 - name: Write user Vault policy
-  become: true
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_user_policy_result
   changed_when: vault_user_policy_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
-    VAULT_TOKEN: "{{ vault_token }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr, 'VAULT_TOKEN': vault_token}) }}"
   ansible.builtin.command:
     argv: "{{ _vault_cli_stdin_argv + ['policy', 'write', vault_userpass_user_policy_name, '-'] }}"
     stdin: "{{ lookup('ansible.builtin.template', 'vault_user_policy.hcl.j2') }}"
@@ -151,13 +150,12 @@
   loop: "{{ _vault_userpass_resolved_users }}"
   loop_control:
     label: "{{ item.username }}"
-  become: true
+  become: "{{ _vault_cli_become }}"
+  become_user: "{{ _vault_cli_become_user if (_vault_cli_become_user | length > 0) else omit }}"
   register: vault_userpass_user_result
   changed_when: vault_userpass_user_result.rc == 0
   no_log: "{{ vault_no_log | default(true) }}"
-  environment:
-    VAULT_ADDR: "{{ vault_cli_addr }}"
-    VAULT_TOKEN: "{{ vault_token }}"
+  environment: "{{ _vault_cli_environment | combine({'VAULT_ADDR': vault_cli_addr, 'VAULT_TOKEN': vault_token}) }}"
   ansible.builtin.command:
     argv: "{{ _vault_cli_stdin_argv + ['write', 'auth/userpass/users/' + item.username, '-'] }}"
     stdin: "{{ {'password': item.password, 'policies': item.policies | join(',')} | to_json }}"

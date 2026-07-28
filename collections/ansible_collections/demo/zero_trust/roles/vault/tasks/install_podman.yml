@@ -5,6 +5,62 @@
     name: podman
     state: present
 
+- name: Ensure rootless Podman user exists
+  when: vault_podman_rootless | bool
+  become: true
+  ansible.builtin.user:
+    name: "{{ vault_podman_user }}"
+    state: present
+
+- name: Look up rootless Podman user account details
+  when: vault_podman_rootless | bool
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ vault_podman_user }}"
+
+- name: Check if lingering is enabled for rootless Podman user
+  when: vault_podman_rootless | bool
+  become: true
+  register: vault_podman_linger_check
+  ansible.builtin.stat:
+    path: "/var/lib/systemd/linger/{{ vault_podman_user }}"
+
+- name: Enable lingering for rootless Podman user
+  # No dedicated module wraps `loginctl enable-linger`; the stat check above keeps this
+  # idempotent (only runs, and reports changed, the first time). Linger keeps the user's
+  # systemd instance (and its rootless containers) running without an active login session.
+  when:
+    - vault_podman_rootless | bool
+    - not (vault_podman_linger_check.stat.exists | default(false))
+  become: true
+  ansible.builtin.command:
+    cmd: "loginctl enable-linger {{ vault_podman_user }}"
+
+- name: Set Podman privilege and path facts
+  vars:
+    _rootless: "{{ vault_podman_rootless | bool }}"
+  ansible.builtin.set_fact:
+    # Always become, then drop to vault_podman_user when rootless (become_user is
+    # ignored when become is false). Use | bool — Jinja "{{ false }}" can stringify.
+    _vault_podman_become: true
+    _vault_podman_become_user: "{{ vault_podman_user if (_rootless | bool) else '' }}"
+    _vault_podman_systemd_scope: "{{ 'user' if (_rootless | bool) else 'system' }}"
+    _vault_podman_quadlet_dir: >-
+      {{ (ansible_facts.getent_passwd[vault_podman_user][4] + '/.config/containers/systemd')
+         if (_rootless | bool) else '/etc/containers/systemd' }}
+    _vault_podman_environment: >-
+      {{ {'XDG_RUNTIME_DIR': '/run/user/' + ansible_facts.getent_passwd[vault_podman_user][1]}
+         if (_rootless | bool) else {} }}
+
+- name: Create Podman network
+  when: vault_podman_network | length > 0
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _vault_podman_environment }}"
+  containers.podman.podman_network:
+    name: "{{ vault_podman_network }}"
+    state: present
+
 - name: Validate registry credentials are complete
   when: >-
     (vault_registry_username is defined) or
@@ -25,8 +81,10 @@
     - vault_registry_username | length > 0
     - vault_registry_password is defined
     - vault_registry_password | length > 0
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
   no_log: "{{ vault_no_log | default(true) }}"
+  environment: "{{ _vault_podman_environment }}"
   vars:
     _vault_registry: >-
       {{ vault_registry | default(
@@ -41,7 +99,9 @@
     username: "{{ vault_registry_username }}"
 
 - name: Pull Vault container image
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _vault_podman_environment }}"
   containers.podman.podman_image:
     name: "{{ vault_container_image }}"
     state: present
@@ -56,9 +116,9 @@
   become: true
   ansible.builtin.file:
     state: directory
-    group: "{{ vault_container_gid }}"
+    group: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_gid }}"
     mode: "0755"
-    owner: "{{ vault_container_uid }}"
+    owner: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_uid }}"
     path: "{{ item }}"
 
 - name: Stat TLS files
@@ -80,8 +140,8 @@
     label: "{{ item.item | default(item) }}"
   become: true
   ansible.builtin.file:
-    group: "{{ vault_container_gid }}"
-    owner: "{{ vault_container_uid }}"
+    group: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_gid }}"
+    owner: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_uid }}"
     path: "{{ item.item }}"
 
 - name: Template vault config for container
@@ -92,43 +152,83 @@
     vault_config_tls_key: "{{ vault_container_tls_dir }}/{{ vault_tls_key_dest | basename }}"
   ansible.builtin.template:
     dest: "{{ vault_config_path }}/vault.hcl"
-    group: "{{ vault_container_gid }}"
+    group: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_gid }}"
     mode: "0640"
-    owner: "{{ vault_container_uid }}"
+    owner: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_uid }}"
     src: vault.hcl.j2
 
 - name: Ensure Quadlet unit directory exists
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
   ansible.builtin.file:
     state: directory
     mode: "0755"
-    path: /etc/containers/systemd
+    path: "{{ _vault_podman_quadlet_dir }}"
 
 - name: Remove legacy podman generate-systemd unit if present
+  when: not (vault_podman_rootless | bool)
   become: true
   ansible.builtin.file:
     state: absent
     path: "/etc/systemd/system/container-{{ vault_container_name }}.service"
 
 - name: Install Vault Quadlet unit
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
   register: vault_quadlet
   ansible.builtin.template:
-    dest: "/etc/containers/systemd/{{ vault_container_name }}.container"
+    dest: "{{ _vault_podman_quadlet_dir }}/{{ vault_container_name }}.container"
     mode: "0644"
     src: vault.container.j2
 
 - name: Reload systemd to pick up Quadlet unit
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _vault_podman_environment }}"
   ansible.builtin.systemd:
     daemon_reload: true
+    scope: "{{ _vault_podman_systemd_scope }}"
 
 - name: Enable and start Vault Quadlet service on boot
-  become: true
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _vault_podman_environment }}"
   ansible.builtin.systemd:
     name: "{{ vault_container_name }}.service"
+    scope: "{{ _vault_podman_systemd_scope }}"
     state: "{{ 'restarted' if vault_quadlet.changed else 'started' }}"
     enabled: true
+
+- name: Check Vault container is running
+  become: "{{ _vault_podman_become }}"
+  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+  register: vault_container_running
+  until: >-
+    (vault_container_running.containers | default([])
+     | selectattr('State', 'defined')
+     | selectattr('State.Running', 'defined')
+     | selectattr('State.Running')
+     | list | length) > 0
+  retries: 3
+  delay: 2
+  failed_when: false
+  environment: "{{ _vault_podman_environment }}"
+  containers.podman.podman_container_info:
+    name: "{{ vault_container_name }}"
+
+- name: Fail when Vault container is not running
+  when: >-
+    (vault_container_running.containers | default([])
+     | selectattr('State', 'defined')
+     | selectattr('State.Running', 'defined')
+     | selectattr('State.Running')
+     | list | length) == 0
+  ansible.builtin.fail:
+    msg: >-
+      Vault container "{{ vault_container_name }}" is not running after starting
+      {{ vault_container_name }}.service (scope={{ _vault_podman_systemd_scope }}).
+      Inspect with: systemctl {{ '--user ' if (vault_podman_rootless | bool) else '' }}status {{ vault_container_name }}.service
+      and: podman logs {{ vault_container_name }}
 
 - name: Set vault CLI facts for podman deployment
   ansible.builtin.set_fact:
