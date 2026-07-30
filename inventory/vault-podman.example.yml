@@ -1,0 +1,25 @@
+---
+# Example inventory for Vault via Podman Quadlet (default install path).
+# ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault.yml
+all:
+  children:
+    ungrouped:
+      hosts:
+        vault.example.com:
+
+          vault_install_type: podman
+          vault_fqdn: vault.example.com
+          vault_jwt_oidc_discovery_url: https://ansible.example.com/o
+
+          # Optional: share a Podman network with other containers
+          # vault_podman_network: vault-net
+
+          # Rootless Quadlet under ansible_user is the default
+          # vault_podman_rootless: true
+          # vault_podman_user: "{{ ansible_user }}"
+
+          ### TLS (copied by configure_host when enabled) ###
+          # staging is a directory adjacent to the playbook directory
+          vault_tls_enabled: true
+          vault_tls_cert_src: "{{ playbook_dir }}/staging/fullchain.pem"
+          vault_tls_key_src: "{{ playbook_dir }}/staging/privkey.key"

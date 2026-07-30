@@ -16,8 +16,8 @@ vault_k8s_route_enabled: true
 # External Vault URL for health checks and vault_cli_addr; defaults to https://vault_k8s_route_host
 # vault_k8s_url: https://vault.apps.example.com
 vault_k8s_pod_name: vault-0
-# CLI used for remote vault_cli invocations (kubectl or oc)
-vault_k8s_kubectl: kubectl
+# CLI used for remote vault_cli invocations (oc or kubectl)
+vault_k8s_cli: oc
 # Optional kubeconfig path for kubernetes.core modules
 # vault_k8s_kubeconfig: ~/.kube/config
 vault_k8s_wait_retries: 30

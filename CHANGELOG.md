@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-30 — Add path-specific Vault example inventories
+
+### Added
+
+- Example inventories for each Vault install path: `vault-podman.example.yml`, `vault-rpm.example.yml`, and `vault-k8s.example.yml`
+
+### Changed
+
+- Renamed `vault_k8s_kubectl` to `vault_k8s_cli` and defaulted it to `oc` (set `kubectl` for plain Kubernetes)
+- Replaced the generic `vault.example.yml` with the path-specific examples and documented them in the Vault README
+
 ## 2026-07-30 — Add Kubernetes Helm install path for Vault
 
 ### Added

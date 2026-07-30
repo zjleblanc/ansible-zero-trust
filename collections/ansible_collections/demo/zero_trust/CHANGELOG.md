@@ -17,3 +17,5 @@
 - Preserve custom Cloudflare tunnel `originRequest` settings when configuring hostnames
 - Add `vault` role `install_k8s` entry point for Helm deploy on Kubernetes/OpenShift (dev mode, optional Route) with kubectl/oc vault CLI support and Helm uninstall cleanup
 - Declare `kubernetes.core` dependency for Helm and Kubernetes modules
+- Rename `vault_k8s_kubectl` to `vault_k8s_cli` (default `oc`) for remote vault CLI exec
+- Add path-specific example inventories for podman, rpm, and k8s Vault install paths

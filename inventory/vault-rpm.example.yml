@@ -1,14 +1,17 @@
 ---
+# Example inventory for Vault via HashiCorp RPM on EL.
+# ansible-playbook -i inventory/vault-rpm.example.yml playbooks/pb_setup_vault.yml
 all:
   children:
     ungrouped:
       hosts:
-        vault:
-          ### Vault variables (Required) ###
+        vault.example.com:
+
+          vault_install_type: rpm
           vault_fqdn: vault.example.com
           vault_jwt_oidc_discovery_url: https://ansible.example.com/o
 
-          ### TLS variables (if vault_tls_enabled is true) ###
+          ### TLS (copied by configure_host when enabled) ###
           # staging is a directory adjacent to the playbook directory
           vault_tls_enabled: true
           vault_tls_cert_src: "{{ playbook_dir }}/staging/fullchain.pem"

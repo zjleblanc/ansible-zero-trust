@@ -240,11 +240,11 @@ argument_specs:
         required: false
         default: vault-0
         description: Vault server pod name used for kubectl/oc exec vault_cli
-      vault_k8s_kubectl:
+      vault_k8s_cli:
         type: str
         required: false
-        default: kubectl
-        description: CLI binary for remote vault_cli invocations (kubectl or oc)
+        default: oc
+        description: CLI binary for remote vault_cli invocations (oc or kubectl)
       vault_k8s_kubeconfig:
         type: path
         required: false

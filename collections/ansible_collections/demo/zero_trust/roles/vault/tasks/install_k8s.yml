@@ -158,14 +158,14 @@
     # In-pod listener is plain HTTP (TLS terminates at the Route/Ingress).
     # Trailing -- separates kubectl args from the remote vault command.
     vault_cli_base: >-
-      {{ vault_k8s_kubectl }} exec
+      {{ vault_k8s_cli }} exec
       -n {{ vault_k8s_namespace }}
       {{ vault_k8s_pod_name }}
       --env=VAULT_ADDR=http://127.0.0.1:{{ vault_port }}
       --env=VAULT_SKIP_VERIFY=1
       -- vault
     vault_cli: >-
-      {{ vault_k8s_kubectl }} exec
+      {{ vault_k8s_cli }} exec
       -n {{ vault_k8s_namespace }}
       {{ vault_k8s_pod_name }}
       --env=VAULT_ADDR=http://127.0.0.1:{{ vault_port }}

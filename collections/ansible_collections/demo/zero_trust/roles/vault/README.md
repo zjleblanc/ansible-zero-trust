@@ -95,7 +95,7 @@ Defaults live in `defaults/main/` (split by concern). Entry-point requirements a
 | `vault_k8s_dev_root_token` | `root` | Root token when `vault_k8s_dev_mode` is true |
 | `vault_k8s_route_enabled` | `true` | Create an OpenShift Route for external access |
 | `vault_k8s_pod_name` | `vault-0` | Pod name used for `kubectl`/`oc` exec `vault_cli` |
-| `vault_k8s_kubectl` | `kubectl` | CLI binary for remote `vault_cli` (`kubectl` or `oc`) |
+| `vault_k8s_cli` | `oc` | CLI binary for remote `vault_cli` (`oc` or `kubectl`) |
 | `vault_k8s_wait_retries` | `30` | Retries while waiting for the Vault pod to become ready |
 | `vault_k8s_wait_delay` | `10` | Delay in seconds between pod readiness polls |
 | `vault_k8s_health_retries` | `12` | Retries while verifying Vault HTTP health |
@@ -198,22 +198,31 @@ Repo playbooks under `playbooks/` wrap the role for common flows. Targets defaul
 Run (example):
 
 ```bash
-ansible-playbook -i inventory/local.yml playbooks/pb_setup_vault.yml
-ansible-playbook -i inventory/local.yml playbooks/pb_setup_vault.yml -e vault_install_type=k8s
+ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault.yml
+ansible-playbook -i inventory/vault-rpm.example.yml playbooks/pb_setup_vault.yml
+ansible-playbook -i inventory/vault-k8s.example.yml playbooks/pb_setup_vault.yml
 ```
+
+Path-specific example inventories live under `inventory/`:
+
+| File | `vault_install_type` | Notes |
+| --- | --- | --- |
+| `vault-podman.example.yml` | `podman` | EL host; TLS sources for `configure_host`; optional Podman network / rootless vars |
+| `vault-rpm.example.yml` | `rpm` | EL host; TLS sources for `configure_host` |
+| `vault-k8s.example.yml` | `k8s` | `ansible_connection: local`; Route host / `oc` (or `kubectl`) and optional kubeconfig |
 
 **Expected outcome**
 
 | Step | Result |
 | --- | --- |
-| `configure_host` | TLS cert/key copied (when sources set); firewalld opens `vault_port` |
-| `install_podman` | Quadlet unit installed; Vault container running; `vault_cli` / `vault_cli_addr` set |
-| `init_vault` | Vault initialized (or existing init reloaded); unsealed; `{{ vault_storage_path }}/init_data.json` present; status printed |
+| `configure_host` | TLS cert/key copied (when sources set); firewalld opens `vault_port` (host installs) |
+| `install_podman` / `install_rpm` / `install_k8s` | Vault running; `vault_cli` / `vault_cli_addr` set (`install_k8s` also sets `vault_token` in dev mode) |
+| `init_vault` | Vault initialized (or existing init reloaded); unsealed; `{{ vault_storage_path }}/init_data.json` present; status printed (skipped for k8s when `vault_k8s_dev_mode` is true) |
 | `configure_jwt_auth` | `jwt/` auth enabled; OIDC discovery configured; static and dynamic policies/roles created |
 | `configure_kv_engine` | KV v2 mounted at `secret/`; sample secrets seeded under `secret/data/aap/...` |
 | `configure_userpass_auth` | `userpass/` enabled; admin/user policies written; users from `files/vault_users.json` created; auto-generated passwords saved to `{{ vault_storage_path }}/userpass_credentials.json` when needed |
 
-Inventory must supply at least `vault_fqdn` and `vault_jwt_oidc_discovery_url`. TLS source paths are required when copying certs in `configure_host`.
+Inventory must supply at least `vault_fqdn` and `vault_jwt_oidc_discovery_url`. TLS source paths are required when copying certs in `configure_host`. For `k8s`, set `vault_k8s_route_host` when the OpenShift Route is enabled (or `vault_k8s_url` when it is not).
 
 ### Uninstall
 
@@ -381,7 +390,7 @@ Deploy Vault on Kubernetes/OpenShift via the HashiCorp Helm chart. Creates the n
 | `vault_k8s_route_host` | `str` | when route enabled | — | OpenShift Route hostname |
 | `vault_k8s_url` | `str` | when route disabled | derived | External Vault URL for health checks and `vault_cli_addr` |
 | `vault_k8s_pod_name` | `str` | no | `vault-0` | Pod name for `kubectl`/`oc` exec |
-| `vault_k8s_kubectl` | `str` | no | `kubectl` | CLI binary (`kubectl` or `oc`) |
+| `vault_k8s_cli` | `str` | no | `oc` | CLI binary (`oc` or `kubectl`) |
 | `vault_k8s_kubeconfig` | `path` | no | — | Optional kubeconfig path |
 | `vault_k8s_wait_retries` / `vault_k8s_wait_delay` | `int` | no | `30` / `10` | Pod readiness polling |
 | `vault_k8s_health_retries` / `vault_k8s_health_delay` | `int` | no | `12` / `5` | HTTP health polling |
@@ -395,7 +404,6 @@ Sets `vault_cli` (via `kubectl`/`oc` exec into the pod), `vault_cli_addr` (exter
     tasks_from: install_k8s
   vars:
     vault_k8s_route_host: vault.apps.example.com
-    vault_k8s_kubectl: oc
 ```
 
 Disable the OpenShift Route and supply your own Ingress / URL:
