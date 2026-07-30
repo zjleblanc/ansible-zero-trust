@@ -1,0 +1,57 @@
+---
+- name: Resolve API credentials
+  ansible.builtin.include_tasks: private/resolve_api_token.yml
+
+- name: Assert required hostname variables
+  ansible.builtin.assert:
+    fail_msg: >-
+      Set cloudflare_account_id, cloudflare_zone, cloudflare_tunnel_hostnames, and ensure
+      demo.zero_trust.cloudflare_tunnel's create task has set cloudflare_tunnel_id (or
+      provide cloudflare_tunnel_id explicitly).
+    that:
+      - cloudflare_account_id is defined
+      - cloudflare_account_id | length > 0
+      - cloudflare_zone is defined
+      - cloudflare_zone | length > 0
+      - cloudflare_tunnel_id is defined
+      - cloudflare_tunnel_id | length > 0
+      - cloudflare_tunnel_hostnames is defined
+      - cloudflare_tunnel_hostnames | length > 0
+
+- name: Build tunnel ingress rules from hostnames
+  ansible.builtin.set_fact:
+    _cloudflare_ingress_rules: "{{ lookup('ansible.builtin.template', 'tunnel_ingress.json.j2') | from_json }}"
+    cacheable: false
+
+- name: Put Cloudflare tunnel configuration
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  register: cloudflare_tunnel_config_put
+  ansible.builtin.uri:
+    body:
+      config:
+        ingress: "{{ _cloudflare_ingress_rules }}"
+    body_format: json
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: application/json
+    method: PUT
+    return_content: true
+    status_code: [200]
+    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel/{{ cloudflare_tunnel_id }}/configurations"
+
+- name: Create proxied CNAME records for public hostnames
+  loop: "{{ cloudflare_tunnel_hostnames }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  community.general.cloudflare_dns:
+    state: present
+    api_token: "{{ cloudflare_api_token }}"
+    proxied: true
+    record: >-
+      {{ '@'
+         if (item.hostname == cloudflare_zone)
+         else (item.hostname | regex_replace('\\.' + (cloudflare_zone | regex_escape) + '$', '')) }}
+    type: CNAME
+    value: "{{ cloudflare_tunnel_id }}.cfargotunnel.com"
+    zone: "{{ cloudflare_zone }}"

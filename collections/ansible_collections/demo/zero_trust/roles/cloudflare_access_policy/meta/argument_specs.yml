@@ -1,0 +1,66 @@
+---
+argument_specs:
+  configure:
+    short_description: Create Access applications and policies for tunnel hostnames (no-op when empty)
+    options:
+      cloudflare_api_token:
+        type: str
+        required: false
+        description: >-
+          Cloudflare API token. Prefer CLOUDFLARE_API_TOKEN env var; falls back
+          to this variable (e.g. from ansible-vault encrypted secrets).
+      cloudflare_account_id:
+        type: str
+        required: false
+        description: Cloudflare account ID (required when cloudflare_access_policies is non-empty)
+      cloudflare_access_policies:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: >-
+          Optional Access policies. Each entry has name, hostname, decision,
+          include (required), and optional require, exclude, session_duration,
+          precedence. When empty, this entry point is a no-op.
+      cloudflare_api_base:
+        type: str
+        required: false
+        default: https://api.cloudflare.com/client/v4
+        description: Cloudflare API base URL
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+
+  destroy:
+    short_description: Delete Access applications matching tunnel hostnames (no-op when empty)
+    options:
+      cloudflare_api_token:
+        type: str
+        required: false
+        description: >-
+          Cloudflare API token. Prefer CLOUDFLARE_API_TOKEN env var; falls back
+          to this variable (e.g. from ansible-vault encrypted secrets).
+      cloudflare_account_id:
+        type: str
+        required: false
+        description: Cloudflare account ID (required when cloudflare_access_policies is non-empty)
+      cloudflare_access_policies:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: >-
+          Access policies whose applications should be deleted. Matching is by
+          hostname. When empty, this entry point is a no-op.
+      cloudflare_api_base:
+        type: str
+        required: false
+        default: https://api.cloudflare.com/client/v4
+        description: Cloudflare API base URL
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output

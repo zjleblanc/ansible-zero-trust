@@ -31,7 +31,7 @@
       - vault_token | length > 0
 
 - name: Resolve vault CLI privilege context
-  ansible.builtin.include_tasks: set_vault_cli_context.yml
+  ansible.builtin.include_tasks: private/set_vault_cli_context.yml
 
 - name: Resolve Vault CLI for stdin writes
   ansible.builtin.set_fact:

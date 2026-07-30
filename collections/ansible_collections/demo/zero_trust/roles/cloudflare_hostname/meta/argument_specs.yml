@@ -1,0 +1,86 @@
+---
+argument_specs:
+  configure:
+    short_description: Configure tunnel public hostnames (ingress) and DNS CNAME records
+    options:
+      cloudflare_api_token:
+        type: str
+        required: false
+        description: >-
+          Cloudflare API token. Prefer CLOUDFLARE_API_TOKEN env var; falls back
+          to this variable (e.g. from ansible-vault encrypted secrets).
+      cloudflare_account_id:
+        type: str
+        required: true
+        description: Cloudflare account ID
+      cloudflare_zone:
+        type: str
+        required: true
+        description: DNS zone domain name (e.g. example.com)
+      cloudflare_tunnel_id:
+        type: str
+        required: true
+        description: >-
+          Tunnel ID (set as a fact by demo.zero_trust.cloudflare_tunnel's create task,
+          or provided explicitly)
+      cloudflare_tunnel_hostnames:
+        type: list
+        elements: dict
+        required: true
+        description: >-
+          Public hostname definitions. Each entry requires hostname and service;
+          optional path, no_tls_verify (shorthand for originRequest.noTLSVerify),
+          and originRequest (native Cloudflare originRequest object; merged with
+          no_tls_verify when both are set).
+      cloudflare_api_base:
+        type: str
+        required: false
+        default: https://api.cloudflare.com/client/v4
+        description: Cloudflare API base URL
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+
+  destroy:
+    short_description: Delete DNS CNAME records for tunnel hostnames and reset ingress to catch-all
+    options:
+      cloudflare_api_token:
+        type: str
+        required: false
+        description: >-
+          Cloudflare API token. Prefer CLOUDFLARE_API_TOKEN env var; falls back
+          to this variable (e.g. from ansible-vault encrypted secrets).
+      cloudflare_account_id:
+        type: str
+        required: true
+        description: Cloudflare account ID
+      cloudflare_zone:
+        type: str
+        required: true
+        description: DNS zone domain name (e.g. example.com)
+      cloudflare_tunnel_id:
+        type: str
+        required: true
+        description: >-
+          Tunnel ID (set as a fact by demo.zero_trust.cloudflare_tunnel's create task,
+          or provided explicitly)
+      cloudflare_tunnel_hostnames:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: >-
+          Public hostname definitions whose CNAME records should be removed.
+          Each entry requires hostname. When empty, DNS cleanup is skipped.
+      cloudflare_api_base:
+        type: str
+        required: false
+        default: https://api.cloudflare.com/client/v4
+        description: Cloudflare API base URL
+      cloudflare_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output

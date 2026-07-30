@@ -1,0 +1,26 @@
+[Unit]
+Description=Cloudflare Tunnel (Podman Quadlet)
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image={{ cloudflared_container_image }}
+ContainerName={{ cloudflared_container_name }}
+# Tunnel token is injected from the Podman secret store — never written to this unit file.
+Secret={{ cloudflared_podman_secret_name }},type=env,target=TUNNEL_TOKEN
+{% if cloudflared_podman_network | length > 0 %}
+Network={{ cloudflared_podman_network }}
+{% endif %}
+Exec=tunnel --no-autoupdate run
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+{% if cloudflared_podman_rootless | bool %}
+WantedBy=default.target
+{% else %}
+WantedBy=multi-user.target default.target
+{% endif %}

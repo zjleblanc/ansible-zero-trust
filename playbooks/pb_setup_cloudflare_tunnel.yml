@@ -1,13 +1,17 @@
 ---
-- name: Cloudflare Tunnel Automation
+- name: Cloudflare Tunnel Setup
   hosts: "{{ _hosts | default(omit) }}"
 
   vars:
-    cloudflare_tasks:
-      - create_tunnel
-      - install_podman
-      - configure_hostnames
-      - configure_access
+    setup_tasks:
+      - role: demo.zero_trust.cloudflare_tunnel
+        tasks_from: create
+      - role: demo.zero_trust.cloudflared
+        tasks_from: install
+      - role: demo.zero_trust.cloudflare_hostname
+        tasks_from: configure
+      - role: demo.zero_trust.cloudflare_access_policy
+        tasks_from: configure
 
   tasks:
     - name: Load ansible-vault secrets when CLOUDFLARE_API_TOKEN is unset
@@ -15,11 +19,11 @@
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/vars/secrets.yml"
 
-    - name: "Run demo.zero_trust.cloudflare"
-      loop: "{{ cloudflare_tasks }}"
+    - name: "Run {{ _setup_task.role | split('.') | last }}/{{ _setup_task.tasks_from }}"
+      loop: "{{ setup_tasks }}"
       loop_control:
-        loop_var: function
-        label: "{{ function }}"
+        loop_var: _setup_task
+        label: "{{ _setup_task.role | split('.') | last }}/{{ _setup_task.tasks_from }}"
       ansible.builtin.include_role:
-        name: demo.zero_trust.cloudflare
-        tasks_from: "{{ function }}"
+        name: "{{ _setup_task.role }}"
+        tasks_from: "{{ _setup_task.tasks_from }}"

@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  role_name: cloudflare_access_policy
+  author: Zachary LeBlanc
+  description: >-
+    Create, update, and destroy Cloudflare Access applications and policies
+    for tunnel hostnames
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+  galaxy_tags:
+    - cloudflare
+    - access
+    - zerotrust
+    - security
+dependencies: []

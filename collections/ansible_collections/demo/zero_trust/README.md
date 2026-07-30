@@ -17,7 +17,10 @@ Zero-trust infrastructure automation for Ansible. Reusable roles and patterns fo
 | Role | Description | Documentation |
 | --- | --- | --- |
 | [`vault`](roles/vault/) | Install and initialize HashiCorp Vault (RPM or Podman Quadlet) via discrete task entry points | [README](roles/vault/README.md) |
-| [`cloudflare`](roles/cloudflare/) | Create Cloudflare Tunnels, deploy cloudflared via Podman Quadlet, configure hostnames and Access policies | [README](roles/cloudflare/README.md) |
+| [`cloudflared`](roles/cloudflared/) | Install and uninstall the cloudflared connector on a managed host via Podman Quadlet | [README](roles/cloudflared/README.md) |
+| [`cloudflare_tunnel`](roles/cloudflare_tunnel/) | Create or destroy a Cloudflare Tunnel via the Cloudflare API | [README](roles/cloudflare_tunnel/README.md) |
+| [`cloudflare_hostname`](roles/cloudflare_hostname/) | Configure Cloudflare Tunnel public hostnames (ingress) and DNS CNAME records | [README](roles/cloudflare_hostname/README.md) |
+| [`cloudflare_access_policy`](roles/cloudflare_access_policy/) | Create, update, and destroy Cloudflare Access applications and policies | [README](roles/cloudflare_access_policy/README.md) |
 
 ### Modules
 

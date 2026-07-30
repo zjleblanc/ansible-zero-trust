@@ -1,5 +1,0 @@
----
-# create_tunnel / configure_hostnames
-cloudflare_tunnel_name: ""
-cloudflare_tunnel_config_src: cloudflare
-cloudflare_tunnel_hostnames: []

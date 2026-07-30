@@ -1,0 +1,92 @@
+---
+argument_specs:
+  install:
+    short_description: Deploy cloudflared connector via Podman Quadlet with Podman secret for the tunnel token
+    options:
+      cloudflared_tunnel_token:
+        type: str
+        required: true
+        description: >-
+          Tunnel connector token. Defaults to the cloudflare_tunnel_token fact set by
+          demo.zero_trust.cloudflare_tunnel's create task in the same play.
+      cloudflared_container_image:
+        type: str
+        required: true
+        description: Container image reference for cloudflared
+      cloudflared_container_name:
+        type: str
+        required: true
+        description: Podman container / Quadlet unit name
+      cloudflared_podman_secret_name:
+        type: str
+        required: false
+        default: cloudflare_tunnel_token
+        description: Name of the Podman secret storing the tunnel token
+      cloudflared_podman_network:
+        type: str
+        required: false
+        default: ""
+        description: >-
+          Podman network to join (e.g. shared with demo.zero_trust.vault so cloudflared
+          can reach origin services by container name); empty disables custom networking
+      cloudflared_podman_rootless:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          Run cloudflared as a rootless Podman Quadlet under cloudflared_podman_user (default).
+          Set false for a system-wide rootful Quadlet.
+      cloudflared_podman_user:
+        type: str
+        required: false
+        description: >-
+          User account that owns the rootless Podman Quadlet when cloudflared_podman_rootless
+          is true (defaults to ansible_user)
+      cloudflared_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+
+  uninstall:
+    short_description: Stop and remove the cloudflared Quadlet unit, container, secret, and optionally the image
+    options:
+      cloudflared_container_image:
+        type: str
+        required: true
+        description: Container image reference to remove when cloudflared_uninstall_remove_image is true
+      cloudflared_container_name:
+        type: str
+        required: true
+        description: Podman container / Quadlet unit name (used for detection and cleanup)
+      cloudflared_podman_secret_name:
+        type: str
+        required: false
+        default: cloudflare_tunnel_token
+        description: Name of the Podman secret storing the tunnel token
+      cloudflared_uninstall_remove_image:
+        type: bool
+        required: false
+        default: true
+        description: Whether to remove the cloudflared container image during uninstall
+      cloudflared_podman_network:
+        type: str
+        required: false
+        default: ""
+        description: Podman network to remove during cleanup; empty skips network removal
+      cloudflared_podman_rootless:
+        type: bool
+        required: false
+        default: true
+        description: Whether cloudflared was deployed as a rootless Podman Quadlet (must match install-time value)
+      cloudflared_podman_user:
+        type: str
+        required: false
+        description: >-
+          User account that owns the rootless Podman Quadlet when cloudflared_podman_rootless
+          is true (defaults to ansible_user)
+      cloudflared_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output

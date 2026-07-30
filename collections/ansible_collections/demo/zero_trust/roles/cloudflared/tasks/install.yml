@@ -1,0 +1,126 @@
+---
+- name: Assert tunnel token is available
+  no_log: "{{ cloudflared_no_log | default(true) }}"
+  ansible.builtin.assert:
+    fail_msg: >-
+      cloudflared_tunnel_token is required. Run demo.zero_trust.cloudflare_tunnel's
+      create task first in the same play, or set cloudflared_tunnel_token explicitly.
+    that:
+      - cloudflared_tunnel_token is defined
+      - cloudflared_tunnel_token | length > 0
+
+- name: Install podman
+  become: true
+  ansible.builtin.package:
+    name: podman
+    state: present
+
+- name: Ensure rootless Podman user exists
+  when: cloudflared_podman_rootless | bool
+  become: true
+  ansible.builtin.user:
+    name: "{{ cloudflared_podman_user }}"
+    state: present
+
+- name: Look up rootless Podman user account details
+  when: cloudflared_podman_rootless | bool
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ cloudflared_podman_user }}"
+
+- name: Check if lingering is enabled for rootless Podman user
+  when: cloudflared_podman_rootless | bool
+  become: true
+  register: cloudflared_podman_linger_check
+  ansible.builtin.stat:
+    path: "/var/lib/systemd/linger/{{ cloudflared_podman_user }}"
+
+- name: Enable lingering for rootless Podman user
+  # No dedicated module wraps `loginctl enable-linger`; the stat check above keeps this
+  # idempotent (only runs, and reports changed, the first time). Linger keeps the user's
+  # systemd instance (and its rootless containers) running without an active login session.
+  when:
+    - cloudflared_podman_rootless | bool
+    - not (cloudflared_podman_linger_check.stat.exists | default(false))
+  become: true
+  ansible.builtin.command:
+    cmd: "loginctl enable-linger {{ cloudflared_podman_user }}"
+
+- name: Set Podman privilege and path facts
+  vars:
+    _rootless: "{{ cloudflared_podman_rootless | bool }}"
+  ansible.builtin.set_fact:
+    # Always become, then drop to cloudflared_podman_user when rootless (become_user
+    # is ignored when become is false). Use | bool — Jinja "{{ false }}" can stringify.
+    _cloudflared_podman_become: true
+    _cloudflared_podman_become_user: "{{ cloudflared_podman_user if (_rootless | bool) else '' }}"
+    _cloudflared_podman_systemd_scope: "{{ 'user' if (_rootless | bool) else 'system' }}"
+    _cloudflared_podman_quadlet_dir: >-
+      {{ (ansible_facts.getent_passwd[cloudflared_podman_user][4] + '/.config/containers/systemd')
+         if (_rootless | bool) else '/etc/containers/systemd' }}
+    _cloudflared_podman_environment: >-
+      {{ {'XDG_RUNTIME_DIR': '/run/user/' + ansible_facts.getent_passwd[cloudflared_podman_user][1]}
+         if (_rootless | bool) else {} }}
+
+- name: Create Podman network
+  when: cloudflared_podman_network | length > 0
+  become: "{{ _cloudflared_podman_become }}"
+  become_user: "{{ _cloudflared_podman_become_user if (_cloudflared_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _cloudflared_podman_environment }}"
+  containers.podman.podman_network:
+    name: "{{ cloudflared_podman_network }}"
+    state: present
+
+- name: Pull cloudflared container image
+  become: "{{ _cloudflared_podman_become }}"
+  become_user: "{{ _cloudflared_podman_become_user if (_cloudflared_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _cloudflared_podman_environment }}"
+  containers.podman.podman_image:
+    name: "{{ cloudflared_container_image }}"
+    state: present
+
+- name: Store tunnel token as Podman secret
+  become: "{{ _cloudflared_podman_become }}"
+  become_user: "{{ _cloudflared_podman_become_user if (_cloudflared_podman_become_user | length > 0) else omit }}"
+  no_log: "{{ cloudflared_no_log | default(true) }}"
+  environment: "{{ _cloudflared_podman_environment }}"
+  containers.podman.podman_secret:
+    name: "{{ cloudflared_podman_secret_name }}"
+    state: present
+    data: "{{ cloudflared_tunnel_token }}"
+    force: true
+
+- name: Ensure Quadlet unit directory exists
+  become: "{{ _cloudflared_podman_become }}"
+  become_user: "{{ _cloudflared_podman_become_user if (_cloudflared_podman_become_user | length > 0) else omit }}"
+  ansible.builtin.file:
+    state: directory
+    mode: "0755"
+    path: "{{ _cloudflared_podman_quadlet_dir }}"
+
+- name: Install cloudflared Quadlet unit
+  become: "{{ _cloudflared_podman_become }}"
+  become_user: "{{ _cloudflared_podman_become_user if (_cloudflared_podman_become_user | length > 0) else omit }}"
+  register: cloudflared_quadlet
+  ansible.builtin.template:
+    dest: "{{ _cloudflared_podman_quadlet_dir }}/{{ cloudflared_container_name }}.container"
+    mode: "0644"
+    src: cloudflared.container.j2
+
+- name: Reload systemd to pick up Quadlet unit
+  become: "{{ _cloudflared_podman_become }}"
+  become_user: "{{ _cloudflared_podman_become_user if (_cloudflared_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _cloudflared_podman_environment }}"
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: "{{ _cloudflared_podman_systemd_scope }}"
+
+- name: Enable and start cloudflared Quadlet service
+  become: "{{ _cloudflared_podman_become }}"
+  become_user: "{{ _cloudflared_podman_become_user if (_cloudflared_podman_become_user | length > 0) else omit }}"
+  environment: "{{ _cloudflared_podman_environment }}"
+  ansible.builtin.systemd:
+    name: "{{ cloudflared_container_name }}.service"
+    scope: "{{ _cloudflared_podman_systemd_scope }}"
+    state: "{{ 'restarted' if cloudflared_quadlet.changed else 'started' }}"
+    enabled: true

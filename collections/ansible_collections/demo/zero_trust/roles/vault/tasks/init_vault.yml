@@ -1,6 +1,6 @@
 ---
 - name: Resolve vault CLI privilege context
-  ansible.builtin.include_tasks: set_vault_cli_context.yml
+  ansible.builtin.include_tasks: private/set_vault_cli_context.yml
 
 - name: Vault status (preflight)
   # rc 0 = initialized+unsealed, rc 2 = sealed/uninitialized but API up.

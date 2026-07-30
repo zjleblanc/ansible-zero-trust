@@ -143,7 +143,7 @@ argument_specs:
         required: false
         default: ""
         description: >-
-          Podman network to join (e.g. shared with demo.zero_trust.cloudflare so
+          Podman network to join (e.g. shared with demo.zero_trust.cloudflared so
           cloudflared can reach Vault by container name); empty disables custom networking
       vault_podman_rootless:
         type: bool

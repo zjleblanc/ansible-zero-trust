@@ -3,9 +3,15 @@
   hosts: "{{ _hosts | default(omit) }}"
 
   vars:
-    cloudflare_uninstall_tasks:
-      - uninstall_podman
-      - destroy_tunnel
+    teardown_tasks:
+      - role: demo.zero_trust.cloudflared
+        tasks_from: uninstall
+      - role: demo.zero_trust.cloudflare_access_policy
+        tasks_from: destroy
+      - role: demo.zero_trust.cloudflare_hostname
+        tasks_from: destroy
+      - role: demo.zero_trust.cloudflare_tunnel
+        tasks_from: destroy
 
   tasks:
     - name: Load ansible-vault secrets when CLOUDFLARE_API_TOKEN is unset
@@ -13,11 +19,11 @@
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/vars/secrets.yml"
 
-    - name: "Run demo.zero_trust.cloudflare"
-      loop: "{{ cloudflare_uninstall_tasks }}"
+    - name: "Run {{ _teardown_task.role | split('.') | last }}/{{ _teardown_task.tasks_from }}"
+      loop: "{{ teardown_tasks }}"
       loop_control:
-        loop_var: function
-        label: "{{ function }}"
+        loop_var: _teardown_task
+        label: "{{ _teardown_task.role | split('.') | last }}/{{ _teardown_task.tasks_from }}"
       ansible.builtin.include_role:
-        name: demo.zero_trust.cloudflare
-        tasks_from: "{{ function }}"
+        name: "{{ _teardown_task.role }}"
+        tasks_from: "{{ _teardown_task.tasks_from }}"

@@ -1,0 +1,50 @@
+---
+- name: Resolve API credentials
+  ansible.builtin.include_tasks: private/resolve_api_token.yml
+
+- name: Assert required hostname variables
+  ansible.builtin.assert:
+    fail_msg: >-
+      Set cloudflare_account_id, cloudflare_zone, and ensure
+      demo.zero_trust.cloudflare_tunnel's create task has set cloudflare_tunnel_id (or
+      provide cloudflare_tunnel_id explicitly).
+    that:
+      - cloudflare_account_id is defined
+      - cloudflare_account_id | length > 0
+      - cloudflare_zone is defined
+      - cloudflare_zone | length > 0
+      - cloudflare_tunnel_id is defined
+      - cloudflare_tunnel_id | length > 0
+
+- name: Delete proxied CNAME records for public hostnames
+  when: (cloudflare_tunnel_hostnames | default([]) | length) > 0
+  loop: "{{ cloudflare_tunnel_hostnames }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  community.general.cloudflare_dns:
+    state: absent
+    api_token: "{{ cloudflare_api_token }}"
+    record: >-
+      {{ '@'
+         if (item.hostname == cloudflare_zone)
+         else (item.hostname | regex_replace('\\.' + (cloudflare_zone | regex_escape) + '$', '')) }}
+    type: CNAME
+    value: "{{ cloudflare_tunnel_id }}.cfargotunnel.com"
+    zone: "{{ cloudflare_zone }}"
+
+- name: Reset tunnel ingress to catch-all only
+  no_log: "{{ cloudflare_no_log | default(true) }}"
+  ansible.builtin.uri:
+    body:
+      config:
+        ingress:
+          - service: "http_status:404"
+    body_format: json
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: application/json
+    method: PUT
+    return_content: true
+    status_code: [200]
+    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/cfd_tunnel/{{ cloudflare_tunnel_id }}/configurations"

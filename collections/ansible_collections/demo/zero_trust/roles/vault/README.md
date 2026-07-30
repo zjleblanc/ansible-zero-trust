@@ -74,7 +74,7 @@ Defaults live in `defaults/main/` (split by concern). Entry-point requirements a
 | `vault_container_storage_path` | `/vault/data` | In-container path for Vault file storage |
 | `vault_container_config_path` | `/vault/config` | In-container path for Vault configuration |
 | `vault_container_tls_dir` | `/vault/tls` | In-container directory for TLS material |
-| `vault_podman_network` | `""` | Podman network to join (e.g. shared with `demo.zero_trust.cloudflare`); empty disables custom networking |
+| `vault_podman_network` | `""` | Podman network to join (e.g. shared with `demo.zero_trust.cloudflared`); empty disables custom networking |
 | `vault_podman_rootless` | `true` | Run Vault as a rootless Podman Quadlet under `vault_podman_user` (set `false` for rootful) |
 | `vault_podman_user` | `{{ ansible_user }}` | User account that owns the rootless Podman Quadlet when `vault_podman_rootless` is true |
 
@@ -310,7 +310,7 @@ If either registry username or password is set, both must be provided (and optio
     vault_registry_password: "{{ vault_pull_password }}"
 ```
 
-To share a Podman network with `demo.zero_trust.cloudflare` so cloudflared can reach Vault by container name (see the [cloudflare role README](../cloudflare/README.md) for the tunnel side):
+To share a Podman network with `demo.zero_trust.cloudflared` so cloudflared can reach Vault by container name (see the [cloudflared role README](../cloudflared/README.md) for the connector side):
 
 ```yaml
 - name: Install Vault via Podman on a shared network

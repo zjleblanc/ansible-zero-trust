@@ -7,7 +7,7 @@ vault_container_gid: "100"
 vault_container_storage_path: /vault/data
 vault_container_config_path: /vault/config
 vault_container_tls_dir: /vault/tls
-# Podman network to join (e.g. shared with demo.zero_trust.cloudflare); empty disables custom networking
+# Podman network to join (e.g. shared with demo.zero_trust.cloudflared); empty disables custom networking
 vault_podman_network: ""
 # Rootless Podman toggle: true (default) uses a user-scoped Quadlet under vault_podman_user;
 # false uses system-wide rootful Quadlet
