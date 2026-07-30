@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-07-30 — Add Kubernetes Helm install path for Vault
+
+### Added
+
+- Vault role `install_k8s` entry point to deploy HashiCorp Vault on Kubernetes/OpenShift via Helm (dev mode by default, optional OpenShift Route)
+- Helm values and Route templates, k8s defaults, and argument specs for the new install path
+- Collection dependency on `kubernetes.core` (>=3.0.0) for Helm and Kubernetes modules
+- Setup playbook `vault_install_type` selector (`podman` | `rpm` | `k8s`) that builds the install and configure task sequence
+
+### Changed
+
+- `set_vault_cli_context` and JWT/KV/userpass configure tasks support `kubectl`/`oc exec` vault CLI wrappers (inject `VAULT_TOKEN` via `--env`)
+- Uninstall detects Helm releases and removes the Route, release, and namespace (host TLS/firewall cleanup stays RPM/Podman-only)
+- Vault README documents the Kubernetes/OpenShift install and uninstall flow
+
 ## 2026-07-28 — Add Podman network and rootless Quadlet support
 
 ### Added

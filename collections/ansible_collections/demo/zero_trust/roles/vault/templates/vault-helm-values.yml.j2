@@ -1,0 +1,24 @@
+---
+global:
+  openshift: {{ vault_k8s_route_enabled | bool | to_json }}
+
+server:
+  dev:
+    enabled: {{ vault_k8s_dev_mode | bool | to_json }}
+{% if vault_k8s_dev_mode | bool %}
+    devRootToken: "{{ vault_k8s_dev_root_token }}"
+{% endif %}
+  standalone:
+    enabled: true
+  ha:
+    enabled: false
+  service:
+    type: ClusterIP
+  route:
+    enabled: false
+
+injector:
+  enabled: false
+
+ui:
+  enabled: true

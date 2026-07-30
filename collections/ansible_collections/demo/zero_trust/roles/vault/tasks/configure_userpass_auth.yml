@@ -41,7 +41,7 @@
 
 - name: Resolve Vault CLI for stdin writes
   ansible.builtin.set_fact:
-    _vault_cli_stdin_argv: "{{ (vault_cli.split()[:2] + ['-i'] + vault_cli.split()[2:]) if (vault_cli is match('^podman\\s+exec\\b')) else vault_cli.split() }}"
+    _vault_cli_stdin_argv: "{{ (vault_cli.split()[:2] + ['-i'] + vault_cli.split()[2:]) if (vault_cli is match('^(podman|kubectl|oc)\\s+exec\\b')) else vault_cli.split() }}"
 
 - name: Load vault users config
   ansible.builtin.set_fact:

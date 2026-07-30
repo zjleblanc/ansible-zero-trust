@@ -1,5 +1,5 @@
 ---
-# Shared by configure_host, install_rpm, install_podman, init_vault, uninstall
+# Shared by configure_host, install_rpm, install_podman, install_k8s, init_vault, uninstall
 vault_port: "8200"
 vault_tls_enabled: true
 vault_storage_path: /opt/vault/data

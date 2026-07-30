@@ -40,10 +40,28 @@
   ansible.builtin.stat:
     path: "{{ _vault_podman_quadlet_dir }}/{{ vault_container_name }}.container"
 
+- name: Check if Vault Helm release exists
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  register: vault_helm_info
+  changed_when: false
+  failed_when: false
+  kubernetes.core.helm_info:
+    name: "{{ vault_k8s_release_name }}"
+    release_namespace: "{{ vault_k8s_namespace }}"
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
 - name: Set installation type facts
   ansible.builtin.set_fact:
     _vault_podman_installed: "{{ vault_quadlet_unit.stat.exists | default(false) }}"
     _vault_rpm_installed: "{{ vault_rpm_check.rc == 0 }}"
+    _vault_k8s_installed: >-
+      {{ vault_helm_info.status is defined
+         and (vault_helm_info.status is mapping
+              or (vault_helm_info.status | length > 0)) }}
 
 # RPM uninstall path
 - name: Stop and disable vault service (RPM)
@@ -144,9 +162,58 @@
     name: "{{ vault_podman_network }}"
     state: absent
 
-# Common cleanup
+# Kubernetes uninstall path
+- name: Remove Vault OpenShift Route
+  when:
+    - _vault_k8s_installed | bool
+    - vault_k8s_route_enabled | bool
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  failed_when: false
+  kubernetes.core.k8s:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: vault
+    namespace: "{{ vault_k8s_namespace }}"
+    state: absent
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+- name: Uninstall Vault Helm release
+  when: _vault_k8s_installed | bool
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  kubernetes.core.helm:
+    name: "{{ vault_k8s_release_name }}"
+    release_namespace: "{{ vault_k8s_namespace }}"
+    state: absent
+    wait: true
+    wait_timeout: "{{ vault_k8s_helm_timeout }}"
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+- name: Remove Vault namespace
+  when: _vault_k8s_installed | bool
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  kubernetes.core.k8s:
+    api_version: v1
+    kind: Namespace
+    name: "{{ vault_k8s_namespace }}"
+    state: absent
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+# Common cleanup (host installs and local init artifacts from k8s)
 - name: Remove TLS certificate and key
   when:
+    - (_vault_rpm_installed | bool) or (_vault_podman_installed | bool)
     - vault_tls_enabled | bool
     - vault_tls_cert_dest is defined
     - vault_tls_key_dest is defined
@@ -161,6 +228,10 @@
     path: "{{ item }}"
 
 - name: Remove vault host directories
+  when: >-
+    (_vault_rpm_installed | bool)
+    or (_vault_podman_installed | bool)
+    or (_vault_k8s_installed | bool)
   loop:
     - "{{ vault_storage_path }}"
     - "{{ vault_config_path }}"
@@ -172,6 +243,7 @@
     path: "{{ item }}"
 
 - name: Remove firewall rule
+  when: (_vault_rpm_installed | bool) or (_vault_podman_installed | bool)
   become: true
   ansible.posix.firewalld:
     state: disabled

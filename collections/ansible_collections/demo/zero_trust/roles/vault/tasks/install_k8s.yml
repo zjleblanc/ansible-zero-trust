@@ -1,0 +1,174 @@
+---
+# Deploy Vault on Kubernetes/OpenShift via Helm.
+# Based on https://github.com/l3acon/aap-vault (deploy-vault.yml).
+
+- name: Require Route host when OpenShift Route is enabled
+  when: vault_k8s_route_enabled | bool
+  ansible.builtin.assert:
+    fail_msg: >-
+      vault_k8s_route_host is required when vault_k8s_route_enabled is true.
+    that:
+      - vault_k8s_route_host is defined
+      - vault_k8s_route_host | length > 0
+
+- name: Require external Vault URL when Route is disabled
+  when: not (vault_k8s_route_enabled | bool)
+  ansible.builtin.assert:
+    fail_msg: >-
+      vault_k8s_url is required when vault_k8s_route_enabled is false
+      (used for health checks and vault_cli_addr).
+    that:
+      - vault_k8s_url is defined
+      - vault_k8s_url | length > 0
+
+- name: Set Kubernetes Vault URL fact
+  ansible.builtin.set_fact:
+    _vault_k8s_url: >-
+      {{ vault_k8s_url | default('https://' ~ vault_k8s_route_host, true) }}
+
+- name: Create Vault namespace
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  kubernetes.core.k8s:
+    api_version: v1
+    kind: Namespace
+    name: "{{ vault_k8s_namespace }}"
+    state: present
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+- name: Add HashiCorp Helm repository
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  kubernetes.core.helm_repository:
+    name: "{{ vault_k8s_helm_repo_name }}"
+    repo_url: "{{ vault_k8s_helm_repo_url }}"
+    state: present
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+- name: Deploy Vault via Helm
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  kubernetes.core.helm:
+    name: "{{ vault_k8s_release_name }}"
+    chart_ref: "{{ vault_k8s_helm_chart }}"
+    release_namespace: "{{ vault_k8s_namespace }}"
+    create_namespace: true
+    values: "{{ lookup('ansible.builtin.template', 'vault-helm-values.yml.j2') | from_yaml }}"
+    wait: true
+    wait_timeout: "{{ vault_k8s_helm_timeout }}"
+    state: present
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+- name: Create Vault Route for external access
+  when: vault_k8s_route_enabled | bool
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'vault-route.yml.j2') | from_yaml }}"
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+- name: Wait for Vault pod to be ready
+  register: vault_pods
+  until: >-
+    vault_pods.resources | length > 0 and
+    vault_pods.resources[0].status.containerStatuses | default([])
+    | selectattr('ready', 'equalto', true) | list | length > 0
+  retries: "{{ vault_k8s_wait_retries | int }}"
+  delay: "{{ vault_k8s_wait_delay | int }}"
+  vars:
+    _k8s_auth: >-
+      {{ {'kubeconfig': vault_k8s_kubeconfig}
+         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
+         else {} }}
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ vault_k8s_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=vault
+      - component=server
+    field_selectors:
+      - status.phase=Running
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+- name: Verify Vault is accessible
+  register: vault_health
+  until: vault_health is not failed
+  retries: "{{ vault_k8s_health_retries | int }}"
+  delay: "{{ vault_k8s_health_delay | int }}"
+  ansible.builtin.uri:
+    url: "{{ _vault_k8s_url }}/v1/sys/health"
+    method: GET
+    status_code:
+      - 200
+      - 429
+      - 472
+      - 473
+      - 501
+      - 503
+    validate_certs: true
+
+- name: Display Vault status
+  ansible.builtin.debug:
+    msg: >-
+      Vault is running at {{ _vault_k8s_url }}
+      (initialized={{ vault_health.json.initialized | default('unknown') }},
+      sealed={{ vault_health.json.sealed | default('unknown') }})
+
+- name: Ensure host storage path exists for init artifacts
+  become: true
+  ansible.builtin.file:
+    state: directory
+    mode: "0755"
+    path: "{{ vault_storage_path }}"
+
+- name: Persist synthetic init data for Helm chart dev mode
+  when: vault_k8s_dev_mode | bool
+  become: true
+  no_log: "{{ vault_no_log | default(true) }}"
+  ansible.builtin.copy:
+    content: "{{ {'root_token': vault_k8s_dev_root_token} | to_nice_json(indent=2) }}\n"
+    dest: "{{ vault_storage_path }}/init_data.json"
+    mode: "0600"
+
+- name: Set vault_token from Helm chart root token
+  when: vault_k8s_dev_mode | bool
+  no_log: "{{ vault_no_log | default(true) }}"
+  ansible.builtin.set_fact:
+    vault_token: "{{ vault_k8s_dev_root_token }}"
+
+- name: Set vault CLI facts for Kubernetes deployment
+  ansible.builtin.set_fact:
+    # Base invocation without VAULT_TOKEN. set_vault_cli_context.yml injects
+    # --env=VAULT_TOKEN=... when vault_token is available so Ansible-configured
+    # tokens reach the vault CLI inside the pod (kubectl has no -e pass-through).
+    # In-pod listener is plain HTTP (TLS terminates at the Route/Ingress).
+    # Trailing -- separates kubectl args from the remote vault command.
+    vault_cli_base: >-
+      {{ vault_k8s_kubectl }} exec
+      -n {{ vault_k8s_namespace }}
+      {{ vault_k8s_pod_name }}
+      --env=VAULT_ADDR=http://127.0.0.1:{{ vault_port }}
+      --env=VAULT_SKIP_VERIFY=1
+      -- vault
+    vault_cli: >-
+      {{ vault_k8s_kubectl }} exec
+      -n {{ vault_k8s_namespace }}
+      {{ vault_k8s_pod_name }}
+      --env=VAULT_ADDR=http://127.0.0.1:{{ vault_port }}
+      --env=VAULT_SKIP_VERIFY=1
+      -- vault
+    vault_cli_addr: "{{ _vault_k8s_url }}"

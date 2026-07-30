@@ -1,6 +1,6 @@
 # demo.zero_trust.vault
 
-Install, initialize, and configure HashiCorp Vault on EL hosts via discrete task entry points (RPM or Podman Quadlet). Supports AAP OIDC JWT workload identity, KV secrets, and userpass auth.
+Install, initialize, and configure HashiCorp Vault via discrete task entry points — RPM or Podman Quadlet on EL hosts, or Helm on Kubernetes/OpenShift. Supports AAP OIDC JWT workload identity, KV secrets, and userpass auth.
 
 Invoke with `include_role` and `tasks_from` — do not call the role without selecting an entry point.
 
@@ -11,7 +11,7 @@ Invoke with `include_role` and `tasks_from` — do not call the role without sel
     tasks_from: install_rpm
 ```
 
-Typical setup sequence:
+Typical host setup sequence:
 
 1. `configure_host` — copy TLS material and open the firewall port
 2. `install_rpm` **or** `install_podman` — install and start Vault
@@ -20,15 +20,18 @@ Typical setup sequence:
 5. `configure_kv_engine` — enable KV v2 and seed sample secrets (optional)
 6. `configure_userpass_auth` — enable userpass and create users (optional)
 
-Uninstall with `uninstall` (detects RPM or Podman and removes artifacts).
+For Kubernetes/OpenShift, use `install_k8s` instead of steps 1–2 (and skip `init_vault` when Helm chart dev mode is enabled — the default). With `playbooks/pb_setup_vault.yml`, set `vault_install_type: k8s` (or pass `-e vault_install_type=k8s`).
+
+Uninstall with `uninstall` (detects RPM, Podman, and/or Kubernetes Helm release and removes artifacts).
 
 ## Requirements
 
 - Ansible 2.14+
-- Target: EL 8 or EL 9
-- For `configure_host` / `uninstall`: `firewalld` on the target
+- Target: EL 8 or EL 9 (host installs); Kubernetes/OpenShift cluster access for `install_k8s`
+- For `configure_host` / host `uninstall`: `firewalld` on the target
 - For `install_podman` / Podman uninstall: Podman with systemd Quadlet support; `containers.podman` collection
-- For TLS: certificate and key available on the controller (and/or already on the host)
+- For `install_k8s` / Kubernetes uninstall: `kubernetes.core` collection; `kubectl` or `oc` and a valid kubeconfig; Helm CLI available to the controller
+- For TLS (host installs): certificate and key available on the controller (and/or already on the host)
 - For `configure_jwt_auth`: AAP OIDC discovery URL (`vault_jwt_oidc_discovery_url`)
 - For rootless `install_podman` / uninstall: `loginctl`/`systemd-logind` on the target (used to enable lingering for `vault_podman_user`)
 
@@ -78,14 +81,37 @@ Defaults live in `defaults/main/` (split by concern). Entry-point requirements a
 | `vault_podman_rootless` | `true` | Run Vault as a rootless Podman Quadlet under `vault_podman_user` (set `false` for rootful) |
 | `vault_podman_user` | `{{ ansible_user }}` | User account that owns the rootless Podman Quadlet when `vault_podman_rootless` is true |
 
+### Kubernetes defaults
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `vault_k8s_namespace` | `vault` | Kubernetes namespace for the Vault release |
+| `vault_k8s_release_name` | `vault` | Helm release name |
+| `vault_k8s_helm_repo_name` | `hashicorp` | Name of the Helm repository to add |
+| `vault_k8s_helm_repo_url` | `https://helm.releases.hashicorp.com` | URL of the Helm repository to add |
+| `vault_k8s_helm_chart` | `hashicorp/vault` | Helm chart reference |
+| `vault_k8s_helm_timeout` | `5m0s` | Helm wait timeout |
+| `vault_k8s_dev_mode` | `true` | Deploy in Helm chart "dev" mode (already initialized/unsealed) |
+| `vault_k8s_dev_root_token` | `root` | Root token when `vault_k8s_dev_mode` is true |
+| `vault_k8s_route_enabled` | `true` | Create an OpenShift Route for external access |
+| `vault_k8s_pod_name` | `vault-0` | Pod name used for `kubectl`/`oc` exec `vault_cli` |
+| `vault_k8s_kubectl` | `kubectl` | CLI binary for remote `vault_cli` (`kubectl` or `oc`) |
+| `vault_k8s_wait_retries` | `30` | Retries while waiting for the Vault pod to become ready |
+| `vault_k8s_wait_delay` | `10` | Delay in seconds between pod readiness polls |
+| `vault_k8s_health_retries` | `12` | Retries while verifying Vault HTTP health |
+| `vault_k8s_health_delay` | `5` | Delay in seconds between Vault health checks |
+
 Variables without defaults (set in inventory/playbook as needed):
 
 - `vault_fqdn`
 - `vault_tls_cert_src` / `vault_tls_key_src`
 - `vault_registry` / `vault_registry_username` / `vault_registry_password`
-- `vault_cli` / `vault_cli_addr` (normally set by `install_rpm` or `install_podman`)
-- `vault_token` (optional; set by `init_vault` or loaded from `init_data.json`)
+- `vault_cli` / `vault_cli_addr` (normally set by `install_rpm`, `install_podman`, or `install_k8s`)
+- `vault_token` (optional; set by `init_vault`, `install_k8s` in dev mode, or loaded from `init_data.json`)
 - `vault_jwt_oidc_discovery_url` (required for `configure_jwt_auth`)
+- `vault_k8s_route_host` (required when `vault_k8s_route_enabled` is true)
+- `vault_k8s_url` (required when Route is disabled; otherwise defaults to `https://{{ vault_k8s_route_host }}`)
+- `vault_k8s_kubeconfig` (optional kubeconfig path for `kubernetes.core` modules)
 
 ---
 
@@ -148,21 +174,18 @@ Repo playbooks under `playbooks/` wrap the role for common flows. Targets defaul
 
 ### Setup
 
+`playbooks/pb_setup_vault.yml` selects the install entry point from `vault_install_type` (`podman` default, or `rpm` / `k8s`). Set that in inventory or via `-e`. Override the full sequence with `vault_tasks` when needed.
+
 ```yaml
 ---
 - name: Vault Automation
   hosts: "{{ _hosts | default('vault') }}"
 
   vars:
-    vault_tasks:
-      - configure_host
-      - install_podman
-      - init_vault
-      - configure_jwt_auth
-      - configure_kv_engine
-      - configure_userpass_auth
+    vault_install_type: podman  # podman | rpm | k8s
 
   tasks:
+    # Playbook builds vault_tasks from vault_install_type, then:
     - name: "Run demo.zero_trust.vault"
       loop: "{{ vault_tasks }}"
       loop_control:
@@ -176,6 +199,7 @@ Run (example):
 
 ```bash
 ansible-playbook -i inventory/local.yml playbooks/pb_setup_vault.yml
+ansible-playbook -i inventory/local.yml playbooks/pb_setup_vault.yml -e vault_install_type=k8s
 ```
 
 **Expected outcome**
@@ -213,10 +237,10 @@ ansible-playbook -i inventory/local.yml playbooks/pb_uninstall_vault.yml
 
 **Expected outcome**
 
-- Detects RPM and/or Podman install
-- Stops services, removes package or Quadlet/container/image
-- Removes TLS material (when enabled), `vault_storage_path`, `vault_config_path`, and the firewalld port rule
-- Host no longer runs Vault; init data and generated credentials under storage are deleted
+- Detects RPM, Podman, and/or Kubernetes Helm install
+- Stops services, removes package or Quadlet/container/image, or uninstalls the Helm release / Route / namespace
+- For host installs: removes TLS material (when enabled), `vault_storage_path`, `vault_config_path`, and the firewalld port rule
+- Host / cluster no longer runs Vault; init data and generated credentials under storage are deleted
 
 ---
 
@@ -332,18 +356,89 @@ Rootless is the default. To force a rootful (system-wide) Quadlet:
     vault_podman_rootless: false
 ```
 
+### `install_k8s`
+
+> Based on the Kubernetes deployment approach from
+> [l3acon/aap-vault](https://github.com/l3acon/aap-vault) by
+> [@l3acon](https://github.com/l3acon).
+
+Deploy Vault on Kubernetes/OpenShift via the HashiCorp Helm chart. Creates the namespace, adds the Helm repo, installs the release, optionally creates an OpenShift Route, waits for the pod, and verifies HTTP health.
+
+| Option | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `vault_port` | `str` | yes | `"8200"` | TCP port Vault listens on inside the pod |
+| `vault_storage_path` | `path` | yes | `/opt/vault/data` | Host path where `init_data.json` is written |
+| `vault_no_log` | `bool` | no | `true` | Suppress sensitive task output |
+| `vault_k8s_namespace` | `str` | no | `vault` | Kubernetes namespace for the Vault release |
+| `vault_k8s_release_name` | `str` | no | `vault` | Helm release name |
+| `vault_k8s_helm_repo_name` | `str` | no | `hashicorp` | Name of the Helm repository to add |
+| `vault_k8s_helm_repo_url` | `str` | no | HashiCorp Helm URL | URL of the Helm repository to add |
+| `vault_k8s_helm_chart` | `str` | no | `hashicorp/vault` | Helm chart reference |
+| `vault_k8s_helm_timeout` | `str` | no | `5m0s` | Helm wait timeout |
+| `vault_k8s_dev_mode` | `bool` | no | `true` | Helm chart "dev" mode (already initialized/unsealed); skip `init_vault` |
+| `vault_k8s_dev_root_token` | `str` | no | `root` | Root token when `vault_k8s_dev_mode` is true |
+| `vault_k8s_route_enabled` | `bool` | no | `true` | Create an OpenShift Route for external access |
+| `vault_k8s_route_host` | `str` | when route enabled | — | OpenShift Route hostname |
+| `vault_k8s_url` | `str` | when route disabled | derived | External Vault URL for health checks and `vault_cli_addr` |
+| `vault_k8s_pod_name` | `str` | no | `vault-0` | Pod name for `kubectl`/`oc` exec |
+| `vault_k8s_kubectl` | `str` | no | `kubectl` | CLI binary (`kubectl` or `oc`) |
+| `vault_k8s_kubeconfig` | `path` | no | — | Optional kubeconfig path |
+| `vault_k8s_wait_retries` / `vault_k8s_wait_delay` | `int` | no | `30` / `10` | Pod readiness polling |
+| `vault_k8s_health_retries` / `vault_k8s_health_delay` | `int` | no | `12` / `5` | HTTP health polling |
+
+Sets `vault_cli` (via `kubectl`/`oc` exec into the pod), `vault_cli_addr` (external URL), and in dev mode also `vault_token` plus a synthetic `init_data.json` for downstream entry points.
+
+```yaml
+- name: Install Vault on OpenShift (dev mode)
+  ansible.builtin.include_role:
+    name: demo.zero_trust.vault
+    tasks_from: install_k8s
+  vars:
+    vault_k8s_route_host: vault.apps.example.com
+    vault_k8s_kubectl: oc
+```
+
+Disable the OpenShift Route and supply your own Ingress / URL:
+
+```yaml
+- name: Install Vault without an OpenShift Route
+  ansible.builtin.include_role:
+    name: demo.zero_trust.vault
+    tasks_from: install_k8s
+  vars:
+    vault_k8s_route_enabled: false
+    vault_k8s_url: https://vault.example.com
+```
+
+Production-like (non-dev) deploy — run `init_vault` afterward:
+
+```yaml
+- name: Install Vault on Kubernetes (non-dev)
+  ansible.builtin.include_role:
+    name: demo.zero_trust.vault
+    tasks_from: install_k8s
+  vars:
+    vault_k8s_dev_mode: false
+    vault_k8s_route_host: vault.apps.example.com
+
+- name: Initialize Vault
+  ansible.builtin.include_role:
+    name: demo.zero_trust.vault
+    tasks_from: init_vault
+```
+
 ### `init_vault`
 
 Initialize, unseal, and report Vault status. Idempotent: skips init when already initialized and reloads `init_data.json`.
 
 | Option | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `vault_cli` | `str` | yes | set by install | Vault CLI invocation (binary or `podman exec` wrapper) |
+| `vault_cli` | `str` | yes | set by install | Vault CLI invocation (binary, `podman exec`, or `kubectl`/`oc` exec wrapper) |
 | `vault_cli_addr` | `str` | yes | set by install | `VAULT_ADDR` value for CLI operations |
 | `vault_storage_path` | `path` | yes | `/opt/vault/data` | Host path where `init_data.json` is written |
 | `vault_no_log` | `bool` | no | `true` | Suppress sensitive task output |
 
-Writes initialization output to `{{ vault_storage_path }}/init_data.json` and sets `vault_token` from `root_token` when unset. Prefer running after `install_rpm` or `install_podman`.
+Writes initialization output to `{{ vault_storage_path }}/init_data.json` and sets `vault_token` from `root_token` when unset. Prefer running after `install_rpm` or `install_podman`, or after `install_k8s` when `vault_k8s_dev_mode` is false. Skip when using Helm chart dev mode (already initialized).
 
 ```yaml
 - name: Initialize Vault
@@ -435,7 +530,7 @@ Each user entry needs `username` and `role` (`admin` or `user`). Omit `password`
 
 ### `uninstall`
 
-Detect install type (RPM and/or Podman) and remove Vault services, packages/images, TLS material, storage/config directories, and the firewall rule.
+Detect install type (RPM, Podman, and/or Kubernetes Helm) and remove Vault services, packages/images, Helm release/Route/namespace, TLS material, storage/config directories, and the firewall rule (host installs only).
 
 | Option | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -449,6 +544,11 @@ Detect install type (RPM and/or Podman) and remove Vault services, packages/imag
 | `vault_podman_network` | `str` | no | `""` | Podman network to remove during cleanup; empty skips network removal |
 | `vault_podman_rootless` | `bool` | no | `true` | Whether Vault was deployed as a rootless Podman Quadlet (must match install-time value) |
 | `vault_podman_user` | `str` | no | `ansible_user` | User account that owns the rootless Podman Quadlet when `vault_podman_rootless` is true |
+| `vault_k8s_namespace` | `str` | no | `vault` | Namespace for Helm release detection and cleanup |
+| `vault_k8s_release_name` | `str` | no | `vault` | Helm release name for detection and cleanup |
+| `vault_k8s_route_enabled` | `bool` | no | `true` | Whether an OpenShift Route should be removed |
+| `vault_k8s_helm_timeout` | `str` | no | `5m0s` | Helm wait timeout when uninstalling |
+| `vault_k8s_kubeconfig` | `path` | no | — | Optional kubeconfig path |
 
 ```yaml
 - name: Uninstall Vault

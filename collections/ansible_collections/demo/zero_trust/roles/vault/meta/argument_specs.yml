@@ -159,13 +159,124 @@ argument_specs:
           User account that owns the rootless Podman Quadlet when vault_podman_rootless
           is true (defaults to ansible_user)
 
+  install_k8s:
+    short_description: Install Vault on Kubernetes/OpenShift via Helm
+    options:
+      vault_port:
+        type: str
+        required: true
+        description: TCP port Vault listens on inside the pod
+      vault_storage_path:
+        type: path
+        required: true
+        description: >-
+          Host path where init_data.json is written (synthetic root token in
+          Helm chart dev mode; operator init output otherwise)
+      vault_no_log:
+        type: bool
+        required: false
+        default: true
+        description: Suppress sensitive task output
+      vault_k8s_namespace:
+        type: str
+        required: false
+        default: vault
+        description: Kubernetes namespace for the Vault release
+      vault_k8s_release_name:
+        type: str
+        required: false
+        default: vault
+        description: Helm release name
+      vault_k8s_helm_repo_name:
+        type: str
+        required: false
+        default: hashicorp
+        description: Name of the Helm repository to add
+      vault_k8s_helm_repo_url:
+        type: str
+        required: false
+        default: https://helm.releases.hashicorp.com
+        description: URL of the Helm repository to add
+      vault_k8s_helm_chart:
+        type: str
+        required: false
+        default: hashicorp/vault
+        description: Helm chart reference for Vault
+      vault_k8s_helm_timeout:
+        type: str
+        required: false
+        default: 5m0s
+        description: Helm wait timeout (e.g. 5m0s)
+      vault_k8s_dev_mode:
+        type: bool
+        required: false
+        default: true
+        description: >-
+          Deploy Vault in Helm chart "dev" mode (already initialized and
+          unsealed). Skip init_vault when true.
+      vault_k8s_dev_root_token:
+        type: str
+        required: false
+        default: root
+        description: Root token used when vault_k8s_dev_mode is true
+      vault_k8s_route_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Create an OpenShift Route for external access
+      vault_k8s_route_host:
+        type: str
+        required: false
+        description: >-
+          OpenShift Route hostname (required when vault_k8s_route_enabled is true)
+      vault_k8s_url:
+        type: str
+        required: false
+        description: >-
+          External Vault URL for health checks and vault_cli_addr. Defaults to
+          https://vault_k8s_route_host when unset. Required when Route is disabled.
+      vault_k8s_pod_name:
+        type: str
+        required: false
+        default: vault-0
+        description: Vault server pod name used for kubectl/oc exec vault_cli
+      vault_k8s_kubectl:
+        type: str
+        required: false
+        default: kubectl
+        description: CLI binary for remote vault_cli invocations (kubectl or oc)
+      vault_k8s_kubeconfig:
+        type: path
+        required: false
+        description: Optional kubeconfig path for kubernetes.core modules
+      vault_k8s_wait_retries:
+        type: int
+        required: false
+        default: 30
+        description: Retries while waiting for the Vault pod to become ready
+      vault_k8s_wait_delay:
+        type: int
+        required: false
+        default: 10
+        description: Delay in seconds between pod readiness polls
+      vault_k8s_health_retries:
+        type: int
+        required: false
+        default: 12
+        description: Retries while verifying Vault HTTP health
+      vault_k8s_health_delay:
+        type: int
+        required: false
+        default: 5
+        description: Delay in seconds between Vault health checks
+
   init_vault:
     short_description: Initialize, unseal, and report Vault status
     options:
       vault_cli:
         type: str
         required: true
-        description: Vault CLI invocation (binary or podman exec wrapper)
+        description: Vault CLI invocation (binary, podman exec, or kubectl/oc exec wrapper)
       vault_cli_addr:
         type: str
         required: true
@@ -190,7 +301,7 @@ argument_specs:
       vault_cli:
         type: str
         required: true
-        description: Vault CLI invocation (binary or podman exec wrapper)
+        description: Vault CLI invocation (binary, podman exec, or kubectl/oc exec wrapper)
       vault_cli_addr:
         type: str
         required: true
@@ -199,8 +310,9 @@ argument_specs:
         type: str
         required: false
         description: >-
-          Vault root or admin token. Optional when set by init_vault in the same
-          play or when init_data.json under vault_storage_path contains root_token.
+          Vault root or admin token. Optional when set by init_vault or
+          install_k8s (dev mode) in the same play, or when init_data.json under
+          vault_storage_path contains root_token.
       vault_storage_path:
         type: path
         required: true
@@ -437,3 +549,27 @@ argument_specs:
         description: >-
           User account that owns the rootless Podman Quadlet when vault_podman_rootless
           is true (defaults to ansible_user)
+      vault_k8s_namespace:
+        type: str
+        required: false
+        default: vault
+        description: Kubernetes namespace used for Helm release detection and cleanup
+      vault_k8s_release_name:
+        type: str
+        required: false
+        default: vault
+        description: Helm release name used for detection and cleanup
+      vault_k8s_route_enabled:
+        type: bool
+        required: false
+        default: true
+        description: Whether an OpenShift Route was created and should be removed
+      vault_k8s_helm_timeout:
+        type: str
+        required: false
+        default: 5m0s
+        description: Helm wait timeout when uninstalling the release
+      vault_k8s_kubeconfig:
+        type: path
+        required: false
+        description: Optional kubeconfig path for kubernetes.core modules

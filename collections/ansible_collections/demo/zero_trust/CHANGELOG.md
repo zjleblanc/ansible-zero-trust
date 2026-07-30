@@ -15,3 +15,5 @@
 - Declare `community.general` dependency for `cloudflare_dns` CNAME management
 - Add optional shared Podman networks and rootless Quadlet support (default) for `vault` and `cloudflare`
 - Preserve custom Cloudflare tunnel `originRequest` settings when configuring hostnames
+- Add `vault` role `install_k8s` entry point for Helm deploy on Kubernetes/OpenShift (dev mode, optional Route) with kubectl/oc vault CLI support and Helm uninstall cleanup
+- Declare `kubernetes.core` dependency for Helm and Kubernetes modules
