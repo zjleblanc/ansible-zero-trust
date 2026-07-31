@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-31 — Fix Vault k8s CLI environment injection
+
+### Fixed
+
+- `oc`/`kubectl exec` no longer use unsupported `--env` flags; Vault address, skip-verify, and token are passed through the in-pod `env` command so JWT/KV/userpass configure tasks can reach the Vault CLI in the pod
+- `pb_setup_vault_k8s.yml` interpolates `_vault_*_tasks` so the role loop receives flattened task names instead of literal variable names
+
+### Changed
+
+- Define `vault_cli_base` once and set `vault_cli` from it in a follow-up `set_fact`, keeping a pristine base for token injection across repeated `set_vault_cli_context` includes
+
 ## 2026-07-31 — Split Vault setup playbooks and simplify k8s defaults
 
 ### Added

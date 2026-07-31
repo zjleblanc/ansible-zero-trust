@@ -221,25 +221,18 @@
   ansible.builtin.set_fact:
     vault_token: "{{ vault_k8s_dev_root_token }}"
 
-- name: Set vault CLI facts for Kubernetes deployment
+- name: Set vault CLI base fact for Kubernetes deployment
   ansible.builtin.set_fact:
-    # Base invocation without VAULT_TOKEN. set_vault_cli_context.yml injects
-    # --env=VAULT_TOKEN=... when vault_token is available so Ansible-configured
-    # tokens reach the vault CLI inside the pod (kubectl has no -e pass-through).
-    # In-pod listener is plain HTTP (TLS terminates at the Route/Ingress).
-    # Trailing -- separates kubectl args from the remote vault command.
     vault_cli_base: >-
       {{ vault_k8s_cli }} exec
       -n {{ vault_k8s_namespace }}
       {{ vault_k8s_pod_name }}
-      --env=VAULT_ADDR=http://127.0.0.1:{{ vault_port }}
-      --env=VAULT_SKIP_VERIFY=1
-      -- vault
-    vault_cli: >-
-      {{ vault_k8s_cli }} exec
-      -n {{ vault_k8s_namespace }}
-      {{ vault_k8s_pod_name }}
-      --env=VAULT_ADDR=http://127.0.0.1:{{ vault_port }}
-      --env=VAULT_SKIP_VERIFY=1
-      -- vault
+      -- env
+      VAULT_ADDR=http://127.0.0.1:{{ vault_port }}
+      VAULT_SKIP_VERIFY=1
+      vault
+
+- name: Set vault CLI facts for Kubernetes deployment
+  ansible.builtin.set_fact:
+    vault_cli: "{{ vault_cli_base }}"
     vault_cli_addr: "{{ _vault_k8s_url }}"

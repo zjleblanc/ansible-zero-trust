@@ -13,9 +13,9 @@
       - configure_kv_engine
       - configure_userpass_auth
     vault_tasks:
-      - _vault_pre_init_tasks
-      - _vault_init_tasks
-      - _vault_post_init_tasks
+      - "{{ _vault_pre_init_tasks }}"
+      - "{{ _vault_init_tasks }}"
+      - "{{ _vault_post_init_tasks }}"
 
   tasks:
     - name: Run demo.zero_trust.vault

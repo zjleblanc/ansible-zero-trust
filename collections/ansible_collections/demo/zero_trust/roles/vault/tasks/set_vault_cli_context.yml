@@ -1,6 +1,8 @@
 ---
 # Privilege context for vault_cli invocations.
-# Kubernetes (kubectl/oc exec): no privilege escalation; inject VAULT_TOKEN via --env.
+# Kubernetes (kubectl/oc exec): no privilege escalation; kubectl/oc exec has no
+# --env flag, so VAULT_TOKEN is injected as an argument to the in-pod `env`
+# command instead.
 # Rootless Podman: become the Podman user so `podman exec` sees that user's containers.
 # Rootful Podman / RPM: become root.
 
@@ -8,7 +10,7 @@
   when: vault_cli is match('^(kubectl|oc)\\s+exec\\b')
   vars:
     _k8s_token_env: >-
-      {{ ('--env=VAULT_TOKEN=' ~ vault_token ~ ' ')
+      {{ ('VAULT_TOKEN=' ~ vault_token ~ ' ')
          if (vault_token is defined and (vault_token | length) > 0)
          else '' }}
     _k8s_cli_base: "{{ vault_cli_base | default(vault_cli) }}"
@@ -16,9 +18,9 @@
     _vault_cli_become: false
     _vault_cli_become_user: ""
     _vault_cli_environment: {}
-    # Rebuild from vault_cli_base so repeated includes do not stack --env=VAULT_TOKEN.
+    # Rebuild from vault_cli_base so repeated includes do not stack VAULT_TOKEN.
     vault_cli: >-
-      {{ _k8s_cli_base | regex_replace(' -- ', ' ' ~ _k8s_token_env ~ '-- ') }}
+      {{ _k8s_cli_base | regex_replace(' -- env ', ' -- env ' ~ _k8s_token_env) }}
 
 - name: Look up rootless Podman user for vault CLI
   when:
