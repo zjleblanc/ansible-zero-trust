@@ -4,7 +4,9 @@
 
 | Playbook | View Details |
 | --- | --- |
-| Setup Vault | [`pb_setup_vault.yml`](playbooks/pb_setup_vault.yml) |
+| Setup Vault (Podman) | [`pb_setup_vault_podman.yml`](playbooks/pb_setup_vault_podman.yml) |
+| Setup Vault (RPM) | [`pb_setup_vault_rpm.yml`](playbooks/pb_setup_vault_rpm.yml) |
+| Setup Vault (Kubernetes/OpenShift) | [`pb_setup_vault_k8s.yml`](playbooks/pb_setup_vault_k8s.yml) |
 | Uninstall Vault | [`pb_uninstall_vault.yml`](playbooks/pb_uninstall_vault.yml) |
 | Setup Cloudflare Tunnel | [`pb_setup_cloudflare_tunnel.yml`](playbooks/pb_setup_cloudflare_tunnel.yml) |
 

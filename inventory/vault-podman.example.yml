@@ -1,13 +1,12 @@
 ---
-# Example inventory for Vault via Podman Quadlet (default install path).
-# ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault.yml
+# Example inventory for Vault via Podman Quadlet.
+# ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault_podman.yml
 all:
   children:
-    ungrouped:
+    vault:
       hosts:
         vault.example.com:
 
-          vault_install_type: podman
           vault_fqdn: vault.example.com
           vault_jwt_oidc_discovery_url: https://ansible.example.com/o
 

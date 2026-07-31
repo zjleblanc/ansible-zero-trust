@@ -2,36 +2,127 @@
 # Deploy Vault on Kubernetes/OpenShift via Helm.
 # Based on https://github.com/l3acon/aap-vault (deploy-vault.yml).
 
-- name: Require Route host when OpenShift Route is enabled
-  when: vault_k8s_route_enabled | bool
-  ansible.builtin.assert:
-    fail_msg: >-
-      vault_k8s_route_host is required when vault_k8s_route_enabled is true.
-    that:
-      - vault_k8s_route_host is defined
-      - vault_k8s_route_host | length > 0
-
-- name: Require external Vault URL when Route is disabled
-  when: not (vault_k8s_route_enabled | bool)
-  ansible.builtin.assert:
-    fail_msg: >-
-      vault_k8s_url is required when vault_k8s_route_enabled is false
-      (used for health checks and vault_cli_addr).
-    that:
-      - vault_k8s_url is defined
-      - vault_k8s_url | length > 0
-
-- name: Set Kubernetes Vault URL fact
+- name: Resolve Kubernetes auth options
   ansible.builtin.set_fact:
-    _vault_k8s_url: >-
-      {{ vault_k8s_url | default('https://' ~ vault_k8s_route_host, true) }}
-
-- name: Create Vault namespace
-  vars:
     _k8s_auth: >-
       {{ {'kubeconfig': vault_k8s_kubeconfig}
          if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
          else {} }}
+
+- name: Discover OpenShift ingress domain for cluster base URL
+  when:
+    - vault_k8s_cluster_base_url is not defined or vault_k8s_cluster_base_url | length == 0
+    - >-
+      (vault_k8s_route_host is not defined or vault_k8s_route_host | length == 0)
+      or (vault_k8s_url is not defined or vault_k8s_url | length == 0)
+  register: _vault_k8s_ingress
+  failed_when: false
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Ingress
+    name: cluster
+    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+
+- name: Set cluster base URL from OpenShift ingress domain
+  when:
+    - vault_k8s_cluster_base_url is not defined or vault_k8s_cluster_base_url | length == 0
+    - _vault_k8s_ingress is defined
+    - not (_vault_k8s_ingress is failed)
+    - (_vault_k8s_ingress.resources | default([]) | length > 0)
+    - (_vault_k8s_ingress.resources[0].spec.domain | default('') | length > 0)
+  vars:
+    # Ingress domain is typically apps.<cluster>; store the cluster base only.
+    _vault_k8s_ingress_domain: "{{ _vault_k8s_ingress.resources[0].spec.domain }}"
+  ansible.builtin.set_fact:
+    vault_k8s_cluster_base_url: >-
+      {{ _vault_k8s_ingress_domain | regex_replace('^apps\\.', '') }}
+
+- name: Normalize cluster base URL
+  when: vault_k8s_cluster_base_url is defined and vault_k8s_cluster_base_url | length > 0
+  vars:
+    # Accept accidental scheme/host forms; keep a bare domain (cluster.example.com).
+    _vault_k8s_base_raw: >-
+      {{ vault_k8s_cluster_base_url | urlsplit('hostname')
+         if ('://' in vault_k8s_cluster_base_url)
+         else (vault_k8s_cluster_base_url | regex_replace('^https?://', '') | regex_replace('/+$', '')) }}
+  ansible.builtin.set_fact:
+    vault_k8s_cluster_base_url: >-
+      {{ _vault_k8s_base_raw | regex_replace('^apps\\.', '') }}
+
+- name: Require cluster base URL, Route host, or Vault URL
+  ansible.builtin.assert:
+    fail_msg: >-
+      Set vault_k8s_cluster_base_url (e.g. cluster.example.com), or provide
+      vault_k8s_route_host / vault_k8s_url explicitly. On OpenShift the cluster
+      base is discovered from config.openshift.io/v1 Ingress/cluster when unset.
+      When not using a Route, set vault_k8s_route_enabled to false and provide
+      vault_k8s_cluster_base_url or vault_k8s_url.
+    that:
+      - >-
+        (vault_k8s_cluster_base_url is defined and vault_k8s_cluster_base_url | length > 0)
+        or (vault_k8s_route_host is defined and vault_k8s_route_host | length > 0)
+        or (vault_k8s_url is defined and vault_k8s_url | length > 0)
+
+- name: Set Route host from cluster base URL
+  when:
+    - vault_k8s_route_enabled | bool
+    - vault_k8s_route_host is not defined or vault_k8s_route_host | length == 0
+    - vault_k8s_cluster_base_url is defined
+    - vault_k8s_cluster_base_url | length > 0
+  ansible.builtin.set_fact:
+    vault_k8s_route_host: >-
+      {{ vault_k8s_release_name }}.apps.{{ vault_k8s_cluster_base_url }}
+
+- name: Set Route host from Vault URL hostname
+  when:
+    - vault_k8s_route_enabled | bool
+    - vault_k8s_route_host is not defined or vault_k8s_route_host | length == 0
+    - vault_k8s_url is defined
+    - vault_k8s_url | length > 0
+  ansible.builtin.set_fact:
+    vault_k8s_route_host: "{{ vault_k8s_url | urlsplit('hostname') }}"
+
+- name: Require Route host when OpenShift Route is enabled
+  when: vault_k8s_route_enabled | bool
+  ansible.builtin.assert:
+    fail_msg: >-
+      vault_k8s_route_host could not be derived. Set vault_k8s_cluster_base_url
+      (or vault_k8s_route_host / vault_k8s_url), or ensure OpenShift ingress
+      domain discovery succeeds.
+    that:
+      - vault_k8s_route_host is defined
+      - vault_k8s_route_host | length > 0
+
+- name: Set Kubernetes Vault URL and address facts
+  vars:
+    _vault_k8s_has_base: >-
+      {{ vault_k8s_cluster_base_url is defined and vault_k8s_cluster_base_url | length > 0 }}
+    _vault_k8s_has_route_host: >-
+      {{ vault_k8s_route_host is defined and vault_k8s_route_host | length > 0 }}
+    _vault_k8s_has_url: >-
+      {{ vault_k8s_url is defined and vault_k8s_url | length > 0 }}
+    _vault_k8s_derived_host: >-
+      {{ vault_k8s_route_host if (_vault_k8s_has_route_host | bool)
+         else (
+           (vault_k8s_release_name ~ '.apps.' ~ vault_k8s_cluster_base_url)
+           if (_vault_k8s_has_base | bool) else ''
+         ) }}
+    _vault_k8s_url_resolved: >-
+      {{ vault_k8s_url if (_vault_k8s_has_url | bool)
+         else (
+           ('https://' ~ _vault_k8s_derived_host)
+           if (_vault_k8s_derived_host | length > 0)
+           else ('https://' ~ vault_k8s_route_host)
+         ) }}
+    _vault_k8s_hostname: "{{ _vault_k8s_url_resolved | urlsplit('hostname') }}"
+  ansible.builtin.set_fact:
+    _vault_k8s_url: "{{ _vault_k8s_url_resolved }}"
+    # Prefer an explicit vault_fqdn; otherwise use the Route / URL hostname.
+    vault_fqdn: "{{ vault_fqdn | default(_vault_k8s_hostname, true) }}"
+    # External URL (typically https on 443 via Route/Ingress), not host:8200.
+    vault_addr: "{{ _vault_k8s_url_resolved }}"
+
+- name: Create Vault namespace
   kubernetes.core.k8s:
     api_version: v1
     kind: Namespace
@@ -40,11 +131,6 @@
     kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
 
 - name: Add HashiCorp Helm repository
-  vars:
-    _k8s_auth: >-
-      {{ {'kubeconfig': vault_k8s_kubeconfig}
-         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
-         else {} }}
   kubernetes.core.helm_repository:
     name: "{{ vault_k8s_helm_repo_name }}"
     repo_url: "{{ vault_k8s_helm_repo_url }}"
@@ -52,11 +138,6 @@
     kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
 
 - name: Deploy Vault via Helm
-  vars:
-    _k8s_auth: >-
-      {{ {'kubeconfig': vault_k8s_kubeconfig}
-         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
-         else {} }}
   kubernetes.core.helm:
     name: "{{ vault_k8s_release_name }}"
     chart_ref: "{{ vault_k8s_helm_chart }}"
@@ -70,11 +151,6 @@
 
 - name: Create Vault Route for external access
   when: vault_k8s_route_enabled | bool
-  vars:
-    _k8s_auth: >-
-      {{ {'kubeconfig': vault_k8s_kubeconfig}
-         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
-         else {} }}
   kubernetes.core.k8s:
     state: present
     definition: "{{ lookup('ansible.builtin.template', 'vault-route.yml.j2') | from_yaml }}"
@@ -88,11 +164,6 @@
     | selectattr('ready', 'equalto', true) | list | length > 0
   retries: "{{ vault_k8s_wait_retries | int }}"
   delay: "{{ vault_k8s_wait_delay | int }}"
-  vars:
-    _k8s_auth: >-
-      {{ {'kubeconfig': vault_k8s_kubeconfig}
-         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
-         else {} }}
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Pod

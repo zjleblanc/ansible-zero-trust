@@ -20,7 +20,7 @@ Typical host setup sequence:
 5. `configure_kv_engine` — enable KV v2 and seed sample secrets (optional)
 6. `configure_userpass_auth` — enable userpass and create users (optional)
 
-For Kubernetes/OpenShift, use `install_k8s` instead of steps 1–2 (and skip `init_vault` when Helm chart dev mode is enabled — the default). With `playbooks/pb_setup_vault.yml`, set `vault_install_type: k8s` (or pass `-e vault_install_type=k8s`).
+For Kubernetes/OpenShift, use `install_k8s` instead of steps 1–2 (and skip `init_vault` when Helm chart dev mode is enabled — the default). Repo playbook: `playbooks/pb_setup_vault_k8s.yml`.
 
 Uninstall with `uninstall` (detects RPM, Podman, and/or Kubernetes Helm release and removes artifacts).
 
@@ -62,7 +62,7 @@ Defaults live in `defaults/main/` (split by concern). Entry-point requirements a
 | `vault_storage_path` | `/opt/vault/data` | Host path for Vault file storage |
 | `vault_config_path` | `/opt/vault/config` | Host path for Vault configuration |
 | `vault_no_log` | `true` | Suppress sensitive task output |
-| `vault_addr` | derived | `http(s)://{{ vault_fqdn }}:{{ vault_port }}` |
+| `vault_addr` | derived | `http(s)://{{ vault_fqdn }}:{{ vault_port }}` (host installs); for `k8s`, set to the external URL |
 | `vault_tls_cert_dest` | `/opt/vault/tls/fullchain_{{ vault_fqdn }}.pem` | Destination path for the TLS certificate |
 | `vault_tls_key_dest` | `/opt/vault/tls/{{ vault_fqdn }}.key` | Destination path for the TLS private key |
 
@@ -94,6 +94,9 @@ Defaults live in `defaults/main/` (split by concern). Entry-point requirements a
 | `vault_k8s_dev_mode` | `true` | Deploy in Helm chart "dev" mode (already initialized/unsealed) |
 | `vault_k8s_dev_root_token` | `root` | Root token when `vault_k8s_dev_mode` is true |
 | `vault_k8s_route_enabled` | `true` | Create an OpenShift Route for external access |
+| `vault_k8s_cluster_base_url` | derived | Cluster base domain (`cluster.example.com`); on OpenShift derived by stripping `apps.` from the ingress domain |
+| `vault_k8s_route_host` | derived | OpenShift Route hostname; defaults to `{{ vault_k8s_release_name }}.apps.{{ base }}` |
+| `vault_k8s_url` | derived | External Vault URL; defaults to `https://{{ vault_k8s_route_host }}` |
 | `vault_k8s_pod_name` | `vault-0` | Pod name used for `kubectl`/`oc` exec `vault_cli` |
 | `vault_k8s_cli` | `oc` | CLI binary for remote `vault_cli` (`oc` or `kubectl`) |
 | `vault_k8s_wait_retries` | `30` | Retries while waiting for the Vault pod to become ready |
@@ -103,14 +106,12 @@ Defaults live in `defaults/main/` (split by concern). Entry-point requirements a
 
 Variables without defaults (set in inventory/playbook as needed):
 
-- `vault_fqdn`
+- `vault_fqdn` (required for host installs; for `k8s`, derived from the cluster base / Route / `vault_k8s_url` hostname)
 - `vault_tls_cert_src` / `vault_tls_key_src`
 - `vault_registry` / `vault_registry_username` / `vault_registry_password`
 - `vault_cli` / `vault_cli_addr` (normally set by `install_rpm`, `install_podman`, or `install_k8s`)
 - `vault_token` (optional; set by `init_vault`, `install_k8s` in dev mode, or loaded from `init_data.json`)
 - `vault_jwt_oidc_discovery_url` (required for `configure_jwt_auth`)
-- `vault_k8s_route_host` (required when `vault_k8s_route_enabled` is true)
-- `vault_k8s_url` (required when Route is disabled; otherwise defaults to `https://{{ vault_k8s_route_host }}`)
 - `vault_k8s_kubeconfig` (optional kubeconfig path for `kubernetes.core` modules)
 
 ---
@@ -174,22 +175,32 @@ Repo playbooks under `playbooks/` wrap the role for common flows. Targets defaul
 
 ### Setup
 
-`playbooks/pb_setup_vault.yml` selects the install entry point from `vault_install_type` (`podman` default, or `rpm` / `k8s`). Set that in inventory or via `-e`. Override the full sequence with `vault_tasks` when needed.
+One playbook per deployment type — each lists its entry-point sequence explicitly (no `vault_install_type` selector):
+
+| Playbook | Inventory example | Sequence |
+| --- | --- | --- |
+| `pb_setup_vault_podman.yml` | `vault-podman.example.yml` | `configure_host` → `install_podman` → `init_vault` → configure\* |
+| `pb_setup_vault_rpm.yml` | `vault-rpm.example.yml` | `configure_host` → `install_rpm` → `init_vault` → configure\* |
+| `pb_setup_vault_k8s.yml` | `vault-k8s.example.yml` | `install_k8s` → (`init_vault` when `vault_k8s_dev_mode` is false) → configure\* |
 
 ```yaml
 ---
-- name: Vault Automation
+# playbooks/pb_setup_vault_podman.yml (rpm / k8s are the same shape)
+- name: Setup Vault (Podman)
   hosts: "{{ _hosts | default('vault') }}"
 
-  vars:
-    vault_install_type: podman  # podman | rpm | k8s
-
   tasks:
-    # Playbook builds vault_tasks from vault_install_type, then:
-    - name: "Run demo.zero_trust.vault"
-      loop: "{{ vault_tasks }}"
+    - name: Run demo.zero_trust.vault
+      loop:
+        - configure_host
+        - install_podman
+        - init_vault
+        - configure_jwt_auth
+        - configure_kv_engine
+        - configure_userpass_auth
       loop_control:
         loop_var: function
+        label: "{{ function }}"
       ansible.builtin.include_role:
         name: demo.zero_trust.vault
         tasks_from: "{{ function }}"
@@ -198,18 +209,10 @@ Repo playbooks under `playbooks/` wrap the role for common flows. Targets defaul
 Run (example):
 
 ```bash
-ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault.yml
-ansible-playbook -i inventory/vault-rpm.example.yml playbooks/pb_setup_vault.yml
-ansible-playbook -i inventory/vault-k8s.example.yml playbooks/pb_setup_vault.yml
+ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault_podman.yml
+ansible-playbook -i inventory/vault-rpm.example.yml playbooks/pb_setup_vault_rpm.yml
+ansible-playbook -i inventory/vault-k8s.example.yml playbooks/pb_setup_vault_k8s.yml
 ```
-
-Path-specific example inventories live under `inventory/`:
-
-| File | `vault_install_type` | Notes |
-| --- | --- | --- |
-| `vault-podman.example.yml` | `podman` | EL host; TLS sources for `configure_host`; optional Podman network / rootless vars |
-| `vault-rpm.example.yml` | `rpm` | EL host; TLS sources for `configure_host` |
-| `vault-k8s.example.yml` | `k8s` | `ansible_connection: local`; Route host / `oc` (or `kubectl`) and optional kubeconfig |
 
 **Expected outcome**
 
@@ -217,12 +220,12 @@ Path-specific example inventories live under `inventory/`:
 | --- | --- |
 | `configure_host` | TLS cert/key copied (when sources set); firewalld opens `vault_port` (host installs) |
 | `install_podman` / `install_rpm` / `install_k8s` | Vault running; `vault_cli` / `vault_cli_addr` set (`install_k8s` also sets `vault_token` in dev mode) |
-| `init_vault` | Vault initialized (or existing init reloaded); unsealed; `{{ vault_storage_path }}/init_data.json` present; status printed (skipped for k8s when `vault_k8s_dev_mode` is true) |
+| `init_vault` | Vault initialized (or existing init reloaded); unsealed; `{{ vault_storage_path }}/init_data.json` present; status printed (omit for k8s Helm chart dev mode) |
 | `configure_jwt_auth` | `jwt/` auth enabled; OIDC discovery configured; static and dynamic policies/roles created |
 | `configure_kv_engine` | KV v2 mounted at `secret/`; sample secrets seeded under `secret/data/aap/...` |
 | `configure_userpass_auth` | `userpass/` enabled; admin/user policies written; users from `files/vault_users.json` created; auto-generated passwords saved to `{{ vault_storage_path }}/userpass_credentials.json` when needed |
 
-Inventory must supply at least `vault_fqdn` and `vault_jwt_oidc_discovery_url`. TLS source paths are required when copying certs in `configure_host`. For `k8s`, set `vault_k8s_route_host` when the OpenShift Route is enabled (or `vault_k8s_url` when it is not).
+Inventory must supply `vault_jwt_oidc_discovery_url`. Host installs (`podman` / `rpm`) also need `vault_fqdn`; TLS source paths are required when copying certs in `configure_host`. For `k8s` on OpenShift, `vault_k8s_cluster_base_url` and derived Route host / `vault_fqdn` / `vault_addr` / `vault_k8s_url` are set automatically (override with `vault_k8s_cluster_base_url`, `vault_k8s_route_host`, or `vault_k8s_url`).
 
 ### Uninstall
 
@@ -373,6 +376,8 @@ Rootless is the default. To force a rootful (system-wide) Quadlet:
 
 Deploy Vault on Kubernetes/OpenShift via the HashiCorp Helm chart. Creates the namespace, adds the Helm repo, installs the release, optionally creates an OpenShift Route, waits for the pod, and verifies HTTP health.
 
+On OpenShift, the role discovers the cluster ingress domain (`config.openshift.io/v1` `Ingress/cluster`) and stores the cluster base as `vault_k8s_cluster_base_url` (strips a leading `apps.`, e.g. `apps.cluster.example.com` → `cluster.example.com`) when unset. From that base it derives `vault_k8s_route_host` (`{{ vault_k8s_release_name }}.apps.{{ base }}`), `vault_k8s_url` (`https://...`), `vault_fqdn`, and `vault_addr` (external HTTPS URL, not `:8200`) for health checks, CLI address, and JWT audiences. Set `vault_k8s_cluster_base_url: cluster.example.com` explicitly on non-OpenShift clusters (or override any derived value).
+
 | Option | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `vault_port` | `str` | yes | `"8200"` | TCP port Vault listens on inside the pod |
@@ -387,23 +392,33 @@ Deploy Vault on Kubernetes/OpenShift via the HashiCorp Helm chart. Creates the n
 | `vault_k8s_dev_mode` | `bool` | no | `true` | Helm chart "dev" mode (already initialized/unsealed); skip `init_vault` |
 | `vault_k8s_dev_root_token` | `str` | no | `root` | Root token when `vault_k8s_dev_mode` is true |
 | `vault_k8s_route_enabled` | `bool` | no | `true` | Create an OpenShift Route for external access |
-| `vault_k8s_route_host` | `str` | when route enabled | — | OpenShift Route hostname |
-| `vault_k8s_url` | `str` | when route disabled | derived | External Vault URL for health checks and `vault_cli_addr` |
+| `vault_k8s_cluster_base_url` | `str` | no | derived | Cluster base domain (`cluster.example.com`; OpenShift strips `apps.` from ingress domain) |
+| `vault_k8s_route_host` | `str` | no | derived | OpenShift Route hostname (`release.apps.base` when unset) |
+| `vault_k8s_url` | `str` | no | derived | External Vault URL for health checks, `vault_cli_addr`, and `vault_addr` |
 | `vault_k8s_pod_name` | `str` | no | `vault-0` | Pod name for `kubectl`/`oc` exec |
 | `vault_k8s_cli` | `str` | no | `oc` | CLI binary (`oc` or `kubectl`) |
 | `vault_k8s_kubeconfig` | `path` | no | — | Optional kubeconfig path |
 | `vault_k8s_wait_retries` / `vault_k8s_wait_delay` | `int` | no | `30` / `10` | Pod readiness polling |
 | `vault_k8s_health_retries` / `vault_k8s_health_delay` | `int` | no | `12` / `5` | HTTP health polling |
 
-Sets `vault_cli` (via `kubectl`/`oc` exec into the pod), `vault_cli_addr` (external URL), and in dev mode also `vault_token` plus a synthetic `init_data.json` for downstream entry points.
+Sets `vault_cli` (via `kubectl`/`oc` exec into the pod), `vault_cli_addr` / `vault_addr` (external URL), `vault_fqdn` when unset, and in dev mode also `vault_token` plus a synthetic `init_data.json` for downstream entry points.
 
 ```yaml
-- name: Install Vault on OpenShift (dev mode)
+- name: Install Vault on OpenShift (dev mode, auto cluster base URL)
+  ansible.builtin.include_role:
+    name: demo.zero_trust.vault
+    tasks_from: install_k8s
+```
+
+Set the cluster base domain (derives Route host / Vault URL / FQDN):
+
+```yaml
+- name: Install Vault with an explicit cluster base domain
   ansible.builtin.include_role:
     name: demo.zero_trust.vault
     tasks_from: install_k8s
   vars:
-    vault_k8s_route_host: vault.apps.example.com
+    vault_k8s_cluster_base_url: cluster.example.com
 ```
 
 Disable the OpenShift Route and supply your own Ingress / URL:
@@ -415,7 +430,8 @@ Disable the OpenShift Route and supply your own Ingress / URL:
     tasks_from: install_k8s
   vars:
     vault_k8s_route_enabled: false
-    vault_k8s_url: https://vault.example.com
+    vault_k8s_cluster_base_url: cluster.example.com
+    # or: vault_k8s_url: https://vault.example.com
 ```
 
 Production-like (non-dev) deploy — run `init_vault` afterward:
@@ -427,7 +443,6 @@ Production-like (non-dev) deploy — run `init_vault` afterward:
     tasks_from: install_k8s
   vars:
     vault_k8s_dev_mode: false
-    vault_k8s_route_host: vault.apps.example.com
 
 - name: Initialize Vault
   ansible.builtin.include_role:

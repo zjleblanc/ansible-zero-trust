@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-07-31 — Split Vault setup playbooks and simplify k8s defaults
+
+### Added
+
+- Separate setup playbooks per deployment type: `pb_setup_vault_podman.yml`, `pb_setup_vault_rpm.yml`, and `pb_setup_vault_k8s.yml` (k8s still inserts `init_vault` when `vault_k8s_dev_mode` is false)
+- `vault_k8s_cluster_base_url` with OpenShift Ingress discovery and derivation of Route host, `vault_k8s_url`, `vault_fqdn`, and `vault_addr`
+- `vault_k8s_image_repository` (default `docker.io/hashicorp/vault`) and optional `vault_k8s_image_tag` for Helm server image overrides
+
+### Changed
+
+- Removed the unified `pb_setup_vault.yml` / `vault_install_type` selector in favor of explicit per-path playbooks and matching example inventories
+- Example inventories target the `vault` group and drop `vault_install_type`; docs (README, Vault role README, BLOG, DRAFT) updated accordingly
+
+### Fixed
+
+- OpenShift short-name image pulls no longer resolve `hashicorp/vault` through `registry.connect.redhat.com` (ImagePullBackOff); Helm values pin a fully qualified `docker.io` repository
+
 ## 2026-07-30 — Add path-specific Vault example inventories
 
 ### Added

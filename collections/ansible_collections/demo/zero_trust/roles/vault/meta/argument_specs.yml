@@ -207,6 +207,19 @@ argument_specs:
         required: false
         default: 5m0s
         description: Helm wait timeout (e.g. 5m0s)
+      vault_k8s_image_repository:
+        type: str
+        required: false
+        default: docker.io/hashicorp/vault
+        description: >-
+          Vault server image repository. Fully qualified (docker.io/...) so
+          OpenShift short-name search does not pull from
+          registry.connect.redhat.com.
+      vault_k8s_image_tag:
+        type: str
+        required: false
+        description: >-
+          Vault server image tag. When unset, the Helm chart default tag is used.
       vault_k8s_dev_mode:
         type: bool
         required: false
@@ -224,17 +237,30 @@ argument_specs:
         required: false
         default: true
         description: Create an OpenShift Route for external access
+      vault_k8s_cluster_base_url:
+        type: str
+        required: false
+        description: >-
+          Cluster base domain without scheme or apps. prefix (e.g.
+          cluster.example.com). When unset on OpenShift, discovered from
+          config.openshift.io/v1 Ingress/cluster by stripping a leading apps..
+          Used to derive vault_k8s_route_host as
+          <vault_k8s_release_name>.apps.<base>, vault_k8s_url (https://...),
+          vault_fqdn, and vault_addr.
       vault_k8s_route_host:
         type: str
         required: false
         description: >-
-          OpenShift Route hostname (required when vault_k8s_route_enabled is true)
+          OpenShift Route hostname. When unset and vault_k8s_route_enabled is
+          true, defaults to <vault_k8s_release_name>.apps.<vault_k8s_cluster_base_url>.
+          Set explicitly to override.
       vault_k8s_url:
         type: str
         required: false
         description: >-
-          External Vault URL for health checks and vault_cli_addr. Defaults to
-          https://vault_k8s_route_host when unset. Required when Route is disabled.
+          External Vault URL for health checks, vault_cli_addr, and vault_addr
+          (JWT audiences). Defaults to https://<vault_k8s_route_host> when
+          unset. Also used to derive vault_fqdn when vault_fqdn is unset.
       vault_k8s_pod_name:
         type: str
         required: false
@@ -297,7 +323,9 @@ argument_specs:
       vault_fqdn:
         type: str
         required: false
-        description: Fully qualified domain name for Vault
+        description: >-
+          Fully qualified domain name for Vault. For k8s, derived from
+          vault_k8s_cluster_base_url / Route / vault_k8s_url when unset.
       vault_cli:
         type: str
         required: true

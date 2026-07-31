@@ -91,14 +91,14 @@
 - Auto-generates passwords when omitted, saves them to `userpass_credentials.json`
 - Useful for Vault UI access during the demo or day-2 operations
 
-## Running the Setup Playbook
+## Running the Setup Playbooks
 
-- Show `pb_setup_vault.yml` and explain the loop-driven design (iterates `vault_tasks` and calls `include_role` for each entry point)
-- Minimum inventory requirements: `vault_fqdn` and `vault_jwt_oidc_discovery_url`
+- Show one playbook per deployment type (`pb_setup_vault_podman.yml`, `_rpm.yml`, `_k8s.yml`) — each lists its entry-point loop explicitly (no install-type selector)
+- Minimum inventory requirements: `vault_fqdn` and `vault_jwt_oidc_discovery_url` (host installs); k8s needs `vault_jwt_oidc_discovery_url` and usually `vault_k8s_cluster_base_url`
 - Example run command:
 
   ```bash
-  ansible-playbook -i inventory/local.yml playbooks/pb_setup_vault.yml
+  ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault_podman.yml
   ```
 
 - Summarize expected outcomes in a table (host configured → Vault running → initialized → JWT auth wired → secrets seeded → users created)

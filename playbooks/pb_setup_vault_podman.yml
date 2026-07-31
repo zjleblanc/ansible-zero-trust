@@ -1,0 +1,21 @@
+---
+# Setup Vault via Podman Quadlet on an EL host.
+# ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault_podman.yml
+- name: Setup Vault (Podman)
+  hosts: "{{ _hosts | default('vault') }}"
+
+  tasks:
+    - name: Run demo.zero_trust.vault
+      loop:
+        - configure_host
+        - install_podman
+        - init_vault
+        - configure_jwt_auth
+        - configure_kv_engine
+        - configure_userpass_auth
+      loop_control:
+        loop_var: function
+        label: "{{ function }}"
+      ansible.builtin.include_role:
+        name: demo.zero_trust.vault
+        tasks_from: "{{ function }}"

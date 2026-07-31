@@ -6,15 +6,60 @@ vault_k8s_helm_repo_name: hashicorp
 vault_k8s_helm_repo_url: https://helm.releases.hashicorp.com
 vault_k8s_helm_chart: hashicorp/vault
 vault_k8s_helm_timeout: 5m0s
+# Fully-qualified image so OpenShift does not short-name resolve through
+# registry.access.redhat.com → registry.connect.redhat.com (ImagePullBackOff).
+vault_k8s_image_repository: docker.io/hashicorp/vault
+# Leave unset to use the Helm chart's default tag.
+# vault_k8s_image_tag: "2.0.3"
 # Deploy Vault in Helm chart "dev" mode (already initialized and unsealed)
 vault_k8s_dev_mode: true
 vault_k8s_dev_root_token: root
 # Create an OpenShift Route for external access
 vault_k8s_route_enabled: true
-# Route hostname (required when vault_k8s_route_enabled is true)
-# vault_k8s_route_host: vault.apps.example.com
-# External Vault URL for health checks and vault_cli_addr; defaults to https://vault_k8s_route_host
-# vault_k8s_url: https://vault.apps.example.com
+# Cluster base domain (no scheme, no apps. prefix). When unset on OpenShift,
+# discovered from config.openshift.io/v1 Ingress/cluster by stripping apps..
+# Derives: vault.<apps.><base> → vault_k8s_route_host / vault_k8s_url / etc.
+# vault_k8s_cluster_base_url: cluster.example.com
+# Route hostname. Defaults to {{ vault_k8s_release_name }}.apps.{{ base }}.
+# vault_k8s_route_host: vault.apps.cluster.example.com
+# External Vault URL for health checks, vault_cli_addr, and vault_addr.
+# Defaults to https://{{ vault_k8s_route_host }}.
+# vault_k8s_url: https://vault.apps.cluster.example.com
+#
+# Derive vault_fqdn when k8s URL inputs are known so common defaults and
+# argument_spec options that template {{ vault_fqdn }} resolve at role entry
+# (before install_k8s set_fact). Host installs leave this undefined — set
+# vault_fqdn in inventory. Explicit vault_fqdn / vault_k8s_route_host win.
+vault_fqdn: >-
+  {{ vault_k8s_route_host
+     if (vault_k8s_route_host is defined and vault_k8s_route_host | length > 0)
+     else (
+       (vault_k8s_release_name ~ '.apps.' ~ vault_k8s_cluster_base_url)
+       if (vault_k8s_cluster_base_url is defined and vault_k8s_cluster_base_url | length > 0)
+       else (
+         (vault_k8s_url | urlsplit('hostname'))
+         if (vault_k8s_url is defined and vault_k8s_url | length > 0)
+         else undef(hint='Set vault_fqdn, or for k8s set vault_k8s_cluster_base_url / vault_k8s_route_host / vault_k8s_url')
+       )
+     ) }}
+# Prefer external HTTPS URL (no :8200) when k8s route/base/url is known.
+# Keep the host-install form when those vars are unset so common.yml behavior
+# is preserved for podman/rpm (and so undef vault_fqdn is not evaluated early).
+vault_addr: >-
+  {{ vault_k8s_url
+     if (vault_k8s_url is defined and vault_k8s_url | length > 0)
+     else (
+       ('https://' ~ (
+         vault_k8s_route_host
+         if (vault_k8s_route_host is defined and vault_k8s_route_host | length > 0)
+         else (vault_k8s_release_name ~ '.apps.' ~ vault_k8s_cluster_base_url)
+       ))
+       if (
+         (vault_k8s_route_host is defined and vault_k8s_route_host | length > 0)
+         or (vault_k8s_cluster_base_url is defined and vault_k8s_cluster_base_url | length > 0)
+       )
+       else (vault_tls_enabled | ternary('https', 'http') ~ '://' ~ vault_fqdn ~ ':' ~ vault_port)
+     ) }}
 vault_k8s_pod_name: vault-0
 # CLI used for remote vault_cli invocations (oc or kubectl)
 vault_k8s_cli: oc

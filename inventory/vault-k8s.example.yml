@@ -1,26 +1,33 @@
 ---
 # Example inventory for Vault via Helm on Kubernetes/OpenShift.
 # Runs against the controller (local connection); kubeconfig must reach the cluster.
-# ansible-playbook -i inventory/vault-k8s.example.yml playbooks/pb_setup_vault.yml
+# ansible-playbook -i inventory/vault-k8s.example.yml playbooks/pb_setup_vault_k8s.yml
 all:
   children:
-    ungrouped:
+    vault:
       hosts:
         localhost:
           ansible_connection: local
 
-          vault_install_type: k8s
-          # Used for vault_addr / JWT bound audiences (defaults include :vault_port)
-          vault_fqdn: vault.apps.example.com
           vault_jwt_oidc_discovery_url: https://ansible.example.com/o
 
-          # OpenShift Route (default). Set vault_k8s_route_enabled: false and
-          # vault_k8s_url when using Ingress or another external URL instead.
-          vault_k8s_route_enabled: true
-          vault_k8s_route_host: vault.apps.example.com
-          # vault_k8s_url: https://vault.apps.example.com
+          # Cluster base domain (no https://, no apps. prefix). On OpenShift
+          # this is discovered automatically from Ingress/cluster. From it the
+          # role derives vault_k8s_route_host, vault_k8s_url, vault_fqdn, and
+          # vault_addr (cluster.example.com → vault.apps.cluster.example.com).
+          vault_k8s_cluster_base_url: cluster.example.com
 
-          # vault_k8s_cli: oc # OpenShift, 
+          # Optional overrides:
+          # vault_k8s_route_host: vault.apps.cluster.example.com
+          # vault_fqdn: vault.apps.cluster.example.com
+          # vault_k8s_url: https://vault.apps.cluster.example.com
+
+          # Or disable the Route and supply an Ingress / external URL:
+          # vault_k8s_route_enabled: false
+          # vault_k8s_cluster_base_url: cluster.example.com
+          # vault_k8s_url: https://vault.example.com
+
+          # vault_k8s_cli: oc # OpenShift
           # vault_k8s_cli: kubectl # vanilla k8s
           # vault_k8s_kubeconfig: ~/.kube/config
 

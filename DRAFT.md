@@ -22,37 +22,35 @@ At no point does a static Vault credential exist in AAP. The trust relationship 
 - TLS certificate and key for the Vault FQDN
 - `containers.podman` collection (handled as a collection dependency)
 
-## The Setup Playbook
+## The Setup Playbooks
 
-The repo is built around a single collection, `demo.zero_trust`, with a `vault` role that uses discrete entry points instead of a monolithic `tasks/main.yml`. Each concern — host prep, install, init, auth config — is a separate `tasks_from` target. The setup playbook loops through them:
+The repo is built around a single collection, `demo.zero_trust`, with a `vault` role that uses discrete entry points instead of a monolithic `tasks/main.yml`. Each concern — host prep, install, init, auth config — is a separate `tasks_from` target. There is one setup playbook per deployment type (`podman`, `rpm`, `k8s`); each lists its sequence explicitly and loops through it:
 
 ```yaml
-- name: Vault Automation
+- name: Setup Vault (Podman)
   hosts: "{{ _hosts | default('vault') }}"
 
-  vars:
-    vault_tasks:
-      - configure_host
-      - install_podman
-      - init_vault
-      - configure_jwt_auth
-      - configure_kv_engine
-      - configure_userpass_auth
-
   tasks:
-    - name: "Run demo.zero_trust.vault"
-      loop: "{{ vault_tasks }}"
+    - name: Run demo.zero_trust.vault
+      loop:
+        - configure_host
+        - install_podman
+        - init_vault
+        - configure_jwt_auth
+        - configure_kv_engine
+        - configure_userpass_auth
       loop_control:
         loop_var: function
+        label: "{{ function }}"
       ansible.builtin.include_role:
         name: demo.zero_trust.vault
         tasks_from: "{{ function }}"
 ```
 
-Run it with at least `vault_fqdn` and `vault_jwt_oidc_discovery_url` in your inventory:
+Run the Podman path with at least `vault_fqdn` and `vault_jwt_oidc_discovery_url` in your inventory:
 
 ```bash
-ansible-playbook -i inventory/local.yml playbooks/pb_setup_vault.yml
+ansible-playbook -i inventory/vault-podman.example.yml playbooks/pb_setup_vault_podman.yml
 ```
 
 Here is what each step does.

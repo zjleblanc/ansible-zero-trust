@@ -1,13 +1,12 @@
 ---
 # Example inventory for Vault via HashiCorp RPM on EL.
-# ansible-playbook -i inventory/vault-rpm.example.yml playbooks/pb_setup_vault.yml
+# ansible-playbook -i inventory/vault-rpm.example.yml playbooks/pb_setup_vault_rpm.yml
 all:
   children:
-    ungrouped:
+    vault:
       hosts:
         vault.example.com:
 
-          vault_install_type: rpm
           vault_fqdn: vault.example.com
           vault_jwt_oidc_discovery_url: https://ansible.example.com/o
 
