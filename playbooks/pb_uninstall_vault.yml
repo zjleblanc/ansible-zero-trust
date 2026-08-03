@@ -1,4 +1,7 @@
 ---
+# Uninstall Vault. Requires vault_deployment_type (rpm|podman|k8s) matching how
+# Vault was installed, e.g.:
+# ansible-playbook -i inventory/local.yml playbooks/pb_uninstall_vault.yml -e vault_deployment_type=podman
 - name: Vault Uninstall
   hosts: "{{ _hosts | default('vault') }}"
 

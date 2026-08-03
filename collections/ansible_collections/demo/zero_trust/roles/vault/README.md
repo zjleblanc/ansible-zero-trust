@@ -22,7 +22,7 @@ Typical host setup sequence:
 
 For Kubernetes/OpenShift, use `install_k8s` instead of steps 1–2 (and skip `init_vault` when Helm chart dev mode is enabled — the default). Repo playbook: `playbooks/pb_setup_vault_k8s.yml`.
 
-Uninstall with `uninstall` (detects RPM, Podman, and/or Kubernetes Helm release and removes artifacts).
+Uninstall with `uninstall`, setting `vault_deployment_type` (`rpm`, `podman`, or `k8s`) to match how Vault was installed.
 
 ## Requirements
 
@@ -47,7 +47,7 @@ By default (`vault_podman_rootless: true`), Vault runs as a **rootless** Podman 
 | `AddCapability=IPC_LOCK` | omitted (Vault already runs with `disable_mlock = true`, so this is safe) | set |
 | `[Install] WantedBy` | `default.target` | `multi-user.target default.target` |
 
-`uninstall` detects and removes the Quadlet unit in the same location `install_podman` would have used, so `vault_podman_rootless` and `vault_podman_user` must be set the same way for both install and uninstall.
+`uninstall` (with `vault_deployment_type: podman`) removes the Quadlet unit from the same location `install_podman` would have used, so `vault_podman_rootless` and `vault_podman_user` must be set the same way for both install and uninstall.
 
 ## Role Variables
 
@@ -244,13 +244,12 @@ Inventory must supply `vault_jwt_oidc_discovery_url`. Host installs (`podman` / 
 Run (example):
 
 ```bash
-ansible-playbook -i inventory/local.yml playbooks/pb_uninstall_vault.yml
+ansible-playbook -i inventory/local.yml playbooks/pb_uninstall_vault.yml -e vault_deployment_type=podman
 ```
 
 **Expected outcome**
 
-- Detects RPM, Podman, and/or Kubernetes Helm install
-- Stops services, removes package or Quadlet/container/image, or uninstalls the Helm release / Route / namespace
+- Based on `vault_deployment_type`, stops services and removes the package (`rpm`), Quadlet/container/image (`podman`), or uninstalls the Helm release / Route / namespace (`k8s`)
 - For host installs: removes TLS material (when enabled), `vault_storage_path`, `vault_config_path`, and the firewalld port rule
 - Host / cluster no longer runs Vault; init data and generated credentials under storage are deleted
 
@@ -553,28 +552,31 @@ Each user entry needs `username` and `role` (`admin` or `user`). Omit `password`
 
 ### `uninstall`
 
-Detect install type (RPM, Podman, and/or Kubernetes Helm) and remove Vault services, packages/images, Helm release/Route/namespace, TLS material, storage/config directories, and the firewall rule (host installs only).
+Remove Vault services, packages/images, Helm release/Route/namespace, TLS material, storage/config directories, and the firewall rule (host installs only) for the deployment type given in `vault_deployment_type`.
 
 | Option | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
+| `vault_deployment_type` | `str` | yes | — | Deployment type to uninstall: `rpm`, `podman`, or `k8s` (must match how Vault was installed) |
 | `vault_port` | `str` | yes | `"8200"` | TCP port to close in firewalld |
 | `vault_tls_enabled` | `bool` | yes | `true` | Whether TLS material should be removed |
 | `vault_tls_cert_dest` / `vault_tls_key_dest` | `path` | no | see shared defaults | TLS paths to remove |
 | `vault_storage_path` | `path` | yes | `/opt/vault/data` | Host storage directory to remove |
 | `vault_config_path` | `path` | yes | `/opt/vault/config` | Host config directory to remove |
-| `vault_container_name` | `str` | yes | `vault` | Quadlet/container name for detection and cleanup |
-| `vault_container_image` | `str` | yes | see defaults | Container image to remove when Podman install is detected |
+| `vault_container_name` | `str` | yes | `vault` | Quadlet/container name to remove (`podman`) |
+| `vault_container_image` | `str` | yes | see defaults | Container image to remove (`podman`) |
 | `vault_podman_network` | `str` | no | `""` | Podman network to remove during cleanup; empty skips network removal |
 | `vault_podman_rootless` | `bool` | no | `true` | Whether Vault was deployed as a rootless Podman Quadlet (must match install-time value) |
 | `vault_podman_user` | `str` | no | `ansible_user` | User account that owns the rootless Podman Quadlet when `vault_podman_rootless` is true |
-| `vault_k8s_namespace` | `str` | no | `vault` | Namespace for Helm release detection and cleanup |
-| `vault_k8s_release_name` | `str` | no | `vault` | Helm release name for detection and cleanup |
-| `vault_k8s_route_enabled` | `bool` | no | `true` | Whether an OpenShift Route should be removed |
-| `vault_k8s_helm_timeout` | `str` | no | `5m0s` | Helm wait timeout when uninstalling |
-| `vault_k8s_kubeconfig` | `path` | no | — | Optional kubeconfig path |
+| `vault_k8s_namespace` | `str` | no | `vault` | Namespace to remove (`k8s`) |
+| `vault_k8s_release_name` | `str` | no | `vault` | Helm release name to uninstall (`k8s`) |
+| `vault_k8s_route_enabled` | `bool` | no | `true` | Whether an OpenShift Route should be removed (`k8s`) |
+| `vault_k8s_helm_timeout` | `str` | no | `5m0s` | Helm wait timeout when uninstalling (`k8s`) |
+| `vault_k8s_kubeconfig` | `path` | no | — | Optional kubeconfig path (`k8s`) |
 
 ```yaml
 - name: Uninstall Vault
+  vars:
+    vault_deployment_type: podman
   ansible.builtin.include_role:
     name: demo.zero_trust.vault
     tasks_from: uninstall

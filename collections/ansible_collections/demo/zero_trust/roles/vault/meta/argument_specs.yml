@@ -527,8 +527,18 @@ argument_specs:
           and dynamic JWT policy paths for e2e testing.
 
   uninstall:
-    short_description: Detect install type and remove Vault artifacts and config
+    short_description: Remove Vault artifacts and config for a given deployment type
     options:
+      vault_deployment_type:
+        type: str
+        required: true
+        choices:
+          - rpm
+          - podman
+          - k8s
+        description: >-
+          Deployment type to uninstall. Must match how Vault was installed
+          (install_rpm, install_podman, or install_k8s).
       vault_port:
         type: str
         required: true

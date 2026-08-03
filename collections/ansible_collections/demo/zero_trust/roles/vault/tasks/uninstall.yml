@@ -1,237 +1,175 @@
 ---
-# Detect installation type
-- name: Check if vault RPM package is installed
+- name: Uninstall RPM Vault
+  when: vault_deployment_type == 'rpm'
   become: true
-  register: vault_rpm_check
-  changed_when: false
-  failed_when: false
-  ansible.builtin.command:
-    argv:
-      - rpm
-      - -q
-      - vault
+  block:
+    - name: Stop and disable vault service (RPM)
+      ansible.builtin.service:
+        name: vault
+        state: stopped
+        enabled: false
 
-- name: Look up rootless Podman user account details
-  when: vault_podman_rootless | bool
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ vault_podman_user }}"
+    - name: Remove vault RPM package
+      ansible.builtin.dnf:
+        name: vault
+        state: absent
 
-- name: Set Podman privilege and path facts
-  vars:
-    _rootless: "{{ vault_podman_rootless | bool }}"
-  ansible.builtin.set_fact:
-    # Always become, then drop to vault_podman_user when rootless (become_user is
-    # ignored when become is false). Use | bool — Jinja "{{ false }}" can stringify.
-    _vault_podman_become: true
-    _vault_podman_become_user: "{{ vault_podman_user if (_rootless | bool) else '' }}"
-    _vault_podman_systemd_scope: "{{ 'user' if (_rootless | bool) else 'system' }}"
-    _vault_podman_quadlet_dir: >-
-      {{ (ansible_facts.getent_passwd[vault_podman_user][4] + '/.config/containers/systemd')
-         if (_rootless | bool) else '/etc/containers/systemd' }}
-    _vault_podman_environment: >-
-      {{ {'XDG_RUNTIME_DIR': '/run/user/' + ansible_facts.getent_passwd[vault_podman_user][1]}
-         if (_rootless | bool) else {} }}
+    - name: Remove Hashicorp yum repository
+      ansible.builtin.yum_repository:
+        name: Hashicorp
+        state: absent
 
-- name: Check if Vault Quadlet unit exists
-  become: "{{ _vault_podman_become }}"
-  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
-  register: vault_quadlet_unit
-  ansible.builtin.stat:
-    path: "{{ _vault_podman_quadlet_dir }}/{{ vault_container_name }}.container"
+    - name: Remove RPM vault config directory
+      ansible.builtin.file:
+        state: absent
+        path: /etc/vault.d
 
-- name: Check if Vault Helm release exists
-  vars:
-    _k8s_auth: >-
-      {{ {'kubeconfig': vault_k8s_kubeconfig}
-         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
-         else {} }}
-  register: vault_helm_info
-  changed_when: false
-  failed_when: false
-  kubernetes.core.helm_info:
-    name: "{{ vault_k8s_release_name }}"
-    release_namespace: "{{ vault_k8s_namespace }}"
-    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+- name: Uninstall Podman Vault
+  when: vault_deployment_type == 'podman'
+  block:
+    - name: Look up rootless Podman user account details
+      when: vault_podman_rootless | bool
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ vault_podman_user }}"
 
-- name: Set installation type facts
-  ansible.builtin.set_fact:
-    _vault_podman_installed: "{{ vault_quadlet_unit.stat.exists | default(false) }}"
-    _vault_rpm_installed: "{{ vault_rpm_check.rc == 0 }}"
-    _vault_k8s_installed: >-
-      {{ vault_helm_info.status is defined
-         and (vault_helm_info.status is mapping
-              or (vault_helm_info.status | length > 0)) }}
+    - name: Set Podman privilege and path facts
+      vars:
+        _rootless: "{{ vault_podman_rootless | bool }}"
+      ansible.builtin.set_fact:
+        # Always become, then drop to vault_podman_user when rootless (become_user is
+        # ignored when become is false). Use | bool — Jinja "{{ false }}" can stringify.
+        _vault_podman_become: true
+        _vault_podman_become_user: "{{ vault_podman_user if (_rootless | bool) else '' }}"
+        _vault_podman_systemd_scope: "{{ 'user' if (_rootless | bool) else 'system' }}"
+        _vault_podman_quadlet_dir: >-
+          {{ (ansible_facts.getent_passwd[vault_podman_user][4] + '/.config/containers/systemd')
+             if (_rootless | bool) else '/etc/containers/systemd' }}
+        _vault_podman_environment: >-
+          {{ {'XDG_RUNTIME_DIR': '/run/user/' + ansible_facts.getent_passwd[vault_podman_user][1]}
+             if (_rootless | bool) else {} }}
 
-# RPM uninstall path
-- name: Stop and disable vault service (RPM)
-  when: _vault_rpm_installed | bool
-  become: true
-  ansible.builtin.service:
-    name: vault
-    state: stopped
-    enabled: false
+    - name: Stop and disable Vault Quadlet service
+      become: "{{ _vault_podman_become }}"
+      become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+      failed_when: false
+      environment: "{{ _vault_podman_environment }}"
+      ansible.builtin.systemd:
+        name: "{{ vault_container_name }}.service"
+        scope: "{{ _vault_podman_systemd_scope }}"
+        state: stopped
+        enabled: false
 
-- name: Remove vault RPM package
-  when: _vault_rpm_installed | bool
-  become: true
-  ansible.builtin.dnf:
-    name: vault
-    state: absent
+    - name: Remove Vault Quadlet unit
+      become: "{{ _vault_podman_become }}"
+      become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+      ansible.builtin.file:
+        state: absent
+        path: "{{ _vault_podman_quadlet_dir }}/{{ vault_container_name }}.container"
 
-- name: Remove Hashicorp yum repository
-  when: _vault_rpm_installed | bool
-  become: true
-  ansible.builtin.yum_repository:
-    name: Hashicorp
-    state: absent
+    - name: Remove legacy podman generate-systemd unit if present
+      when: not (vault_podman_rootless | bool)
+      become: true
+      ansible.builtin.file:
+        state: absent
+        path: "/etc/systemd/system/container-{{ vault_container_name }}.service"
 
-- name: Remove RPM vault config directory
-  when: _vault_rpm_installed | bool
-  become: true
-  ansible.builtin.file:
-    state: absent
-    path: /etc/vault.d
+    - name: Reload systemd after removing Quadlet unit
+      become: "{{ _vault_podman_become }}"
+      become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+      environment: "{{ _vault_podman_environment }}"
+      ansible.builtin.systemd:
+        daemon_reload: true
+        scope: "{{ _vault_podman_systemd_scope }}"
 
-# Podman uninstall path
-- name: Stop and disable Vault Quadlet service
-  when: _vault_podman_installed | bool
-  become: "{{ _vault_podman_become }}"
-  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
-  failed_when: false
-  environment: "{{ _vault_podman_environment }}"
-  ansible.builtin.systemd:
-    name: "{{ vault_container_name }}.service"
-    scope: "{{ _vault_podman_systemd_scope }}"
-    state: stopped
-    enabled: false
+    - name: Remove Vault container
+      become: "{{ _vault_podman_become }}"
+      become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+      environment: "{{ _vault_podman_environment }}"
+      containers.podman.podman_container:
+        name: "{{ vault_container_name }}"
+        state: absent
 
-- name: Remove Vault Quadlet unit
-  when: _vault_podman_installed | bool
-  become: "{{ _vault_podman_become }}"
-  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
-  ansible.builtin.file:
-    state: absent
-    path: "{{ _vault_podman_quadlet_dir }}/{{ vault_container_name }}.container"
+    - name: Remove Vault container image
+      become: "{{ _vault_podman_become }}"
+      become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+      environment: "{{ _vault_podman_environment }}"
+      containers.podman.podman_image:
+        name: "{{ vault_container_image }}"
+        state: absent
 
-- name: Remove legacy podman generate-systemd unit if present
-  when:
-    - _vault_podman_installed | bool
-    - not (vault_podman_rootless | bool)
-  become: true
-  ansible.builtin.file:
-    state: absent
-    path: "/etc/systemd/system/container-{{ vault_container_name }}.service"
+    - name: Remove Podman network
+      when: vault_podman_network | length > 0
+      become: "{{ _vault_podman_become }}"
+      become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
+      failed_when: false
+      environment: "{{ _vault_podman_environment }}"
+      containers.podman.podman_network:
+        name: "{{ vault_podman_network }}"
+        state: absent
 
-- name: Reload systemd after removing Quadlet unit
-  when: _vault_podman_installed | bool
-  become: "{{ _vault_podman_become }}"
-  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
-  environment: "{{ _vault_podman_environment }}"
-  ansible.builtin.systemd:
-    daemon_reload: true
-    scope: "{{ _vault_podman_systemd_scope }}"
-
-- name: Remove Vault container
-  when: _vault_podman_installed | bool
-  become: "{{ _vault_podman_become }}"
-  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
-  environment: "{{ _vault_podman_environment }}"
-  containers.podman.podman_container:
-    name: "{{ vault_container_name }}"
-    state: absent
-
-- name: Remove Vault container image
-  when: _vault_podman_installed | bool
-  become: "{{ _vault_podman_become }}"
-  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
-  environment: "{{ _vault_podman_environment }}"
-  containers.podman.podman_image:
-    name: "{{ vault_container_image }}"
-    state: absent
-
-- name: Remove Podman network
-  when:
-    - _vault_podman_installed | bool
-    - vault_podman_network | length > 0
-  become: "{{ _vault_podman_become }}"
-  become_user: "{{ _vault_podman_become_user if (_vault_podman_become_user | length > 0) else omit }}"
-  failed_when: false
-  environment: "{{ _vault_podman_environment }}"
-  containers.podman.podman_network:
-    name: "{{ vault_podman_network }}"
-    state: absent
-
-# Kubernetes uninstall path
-- name: Remove Vault OpenShift Route
-  when:
-    - _vault_k8s_installed | bool
-    - vault_k8s_route_enabled | bool
+- name: Uninstall Kubernetes Vault
+  when: vault_deployment_type == 'k8s'
   vars:
     _k8s_auth: >-
       {{ {'kubeconfig': vault_k8s_kubeconfig}
          if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
          else {} }}
-  failed_when: false
-  kubernetes.core.k8s:
-    api_version: route.openshift.io/v1
-    kind: Route
-    name: vault
-    namespace: "{{ vault_k8s_namespace }}"
-    state: absent
-    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+  block:
+    - name: Remove Vault OpenShift Route
+      when: vault_k8s_route_enabled | bool
+      failed_when: false
+      kubernetes.core.k8s:
+        api_version: route.openshift.io/v1
+        kind: Route
+        name: vault
+        namespace: "{{ vault_k8s_namespace }}"
+        state: absent
+        kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
 
-- name: Uninstall Vault Helm release
-  when: _vault_k8s_installed | bool
-  vars:
-    _k8s_auth: >-
-      {{ {'kubeconfig': vault_k8s_kubeconfig}
-         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
-         else {} }}
-  kubernetes.core.helm:
-    name: "{{ vault_k8s_release_name }}"
-    release_namespace: "{{ vault_k8s_namespace }}"
-    state: absent
-    wait: true
-    wait_timeout: "{{ vault_k8s_helm_timeout }}"
-    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+    - name: Uninstall Vault Helm release
+      kubernetes.core.helm:
+        name: "{{ vault_k8s_release_name }}"
+        release_namespace: "{{ vault_k8s_namespace }}"
+        state: absent
+        wait: true
+        wait_timeout: "{{ vault_k8s_helm_timeout }}"
+        kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
 
-- name: Remove Vault namespace
-  when: _vault_k8s_installed | bool
-  vars:
-    _k8s_auth: >-
-      {{ {'kubeconfig': vault_k8s_kubeconfig}
-         if (vault_k8s_kubeconfig is defined and vault_k8s_kubeconfig | length > 0)
-         else {} }}
-  kubernetes.core.k8s:
-    api_version: v1
-    kind: Namespace
-    name: "{{ vault_k8s_namespace }}"
-    state: absent
-    kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
+    - name: Remove Vault namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: "{{ vault_k8s_namespace }}"
+        state: absent
+        kubeconfig: "{{ _k8s_auth.kubeconfig | default(omit) }}"
 
-# Common cleanup (host installs and local init artifacts from k8s)
-- name: Remove TLS certificate and key
-  when:
-    - (_vault_rpm_installed | bool) or (_vault_podman_installed | bool)
-    - vault_tls_enabled | bool
-    - vault_tls_cert_dest is defined
-    - vault_tls_key_dest is defined
-  loop:
-    - "{{ vault_tls_cert_dest }}"
-    - "{{ vault_tls_key_dest }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Clean up host Vault artifacts
+  when: vault_deployment_type in ['rpm', 'podman']
   become: true
-  ansible.builtin.file:
-    state: absent
-    path: "{{ item }}"
+  block:
+    - name: Remove TLS certificate and key
+      when:
+        - vault_tls_enabled | bool
+        - vault_tls_cert_dest is defined
+        - vault_tls_key_dest is defined
+      loop:
+        - "{{ vault_tls_cert_dest }}"
+        - "{{ vault_tls_key_dest }}"
+      loop_control:
+        label: "{{ item }}"
+      ansible.builtin.file:
+        state: absent
+        path: "{{ item }}"
+
+    - name: Remove firewall rule
+      ansible.posix.firewalld:
+        state: disabled
+        immediate: true
+        permanent: true
+        port: "{{ vault_port }}/tcp"
 
 - name: Remove vault host directories
-  when: >-
-    (_vault_rpm_installed | bool)
-    or (_vault_podman_installed | bool)
-    or (_vault_k8s_installed | bool)
   loop:
     - "{{ vault_storage_path }}"
     - "{{ vault_config_path }}"
@@ -241,12 +179,3 @@
   ansible.builtin.file:
     state: absent
     path: "{{ item }}"
-
-- name: Remove firewall rule
-  when: (_vault_rpm_installed | bool) or (_vault_podman_installed | bool)
-  become: true
-  ansible.posix.firewalld:
-    state: disabled
-    immediate: true
-    permanent: true
-    port: "{{ vault_port }}/tcp"
