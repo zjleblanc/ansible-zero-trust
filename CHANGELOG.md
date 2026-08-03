@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-03 — Require vault_deployment_type for uninstall
+
+### Changed
+
+- Vault `uninstall` no longer auto-detects RPM, Podman, or Helm installs; callers must set required `vault_deployment_type` (`rpm`, `podman`, or `k8s`)
+- Uninstall paths are grouped into blocks per deployment type (plus host TLS/firewall cleanup) instead of repeating install-detection conditionals on every task
+- Argument specs, Vault role README, and `pb_uninstall_vault.yml` document the required deployment type
+
 ## 2026-07-31 — Fix Vault k8s CLI environment injection
 
 ### Fixed
