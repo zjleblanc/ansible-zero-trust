@@ -9,7 +9,14 @@
       - cloudflare_tunnel_token is defined
       - cloudflare_tunnel_token | length > 0
 
+- name: Check for rpm-ostree (immutable OS)
+  become: true
+  register: _cloudflare_ostree_boot
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+
 - name: Install podman
+  when: not (_cloudflare_ostree_boot.stat.exists | default(false))
   become: true
   ansible.builtin.package:
     name: podman

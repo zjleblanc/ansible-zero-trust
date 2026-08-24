@@ -1,18 +1,16 @@
 ---
-- name: Assert Access policy entry fields
+- name: Assert Access app entry fields
   ansible.builtin.assert:
     fail_msg: >-
-      Each cloudflare_access_policies entry requires name, hostname, decision,
-      and a non-empty include list.
+      Each cloudflare_access_apps entry requires name, hostname, and a non-empty
+      policies list.
     that:
-      - cloudflare_access_policy.name is defined
-      - cloudflare_access_policy.name | length > 0
-      - cloudflare_access_policy.hostname is defined
-      - cloudflare_access_policy.hostname | length > 0
-      - cloudflare_access_policy.decision is defined
-      - cloudflare_access_policy.decision | length > 0
-      - cloudflare_access_policy.include is defined
-      - cloudflare_access_policy.include | length > 0
+      - cloudflare_access_app.name is defined
+      - cloudflare_access_app.name | length > 0
+      - cloudflare_access_app.hostname is defined
+      - cloudflare_access_app.hostname | length > 0
+      - cloudflare_access_app.policies is defined
+      - cloudflare_access_app.policies | length > 0
 
 - name: Find existing Access application for hostname
   no_log: "{{ cloudflare_no_log | default(true) }}"
@@ -20,7 +18,7 @@
     _cloudflare_access_app: >-
       {{ (cloudflare_access_apps_list.json.result | default([]))
          | selectattr('domain', 'defined')
-         | selectattr('domain', 'equalto', cloudflare_access_policy.hostname)
+         | selectattr('domain', 'equalto', cloudflare_access_app.hostname)
          | list
          | first
          | default({}, true) }}
@@ -32,12 +30,12 @@
   register: cloudflare_access_app_create
   ansible.builtin.uri:
     body:
-      name: "{{ cloudflare_access_policy.name }}"
+      name: "{{ cloudflare_access_app.name }}"
       type: self_hosted
-      domain: "{{ cloudflare_access_policy.hostname }}"
+      domain: "{{ cloudflare_access_app.hostname }}"
       destinations:
         - type: public
-          uri: "{{ cloudflare_access_policy.hostname }}"
+          uri: "{{ cloudflare_access_app.hostname }}"
     body_format: json
     headers:
       Authorization: "Bearer {{ cloudflare_api_token }}"
@@ -81,67 +79,9 @@
     status_code: [200]
     url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/access/apps/{{ _cloudflare_access_app_id }}/policies"
 
-- name: Find existing Access policy by name
-  no_log: "{{ cloudflare_no_log | default(true) }}"
-  ansible.builtin.set_fact:
-    _cloudflare_access_policy_match: >-
-      {{ (cloudflare_access_app_policies.json.result | default([]))
-         | selectattr('name', 'defined')
-         | selectattr('name', 'equalto', cloudflare_access_policy.name)
-         | list
-         | first
-         | default({}, true) }}
-    cacheable: false
-
-- name: Build Access policy body
-  no_log: "{{ cloudflare_no_log | default(true) }}"
-  ansible.builtin.set_fact:
-    _cloudflare_access_policy_body: >-
-      {{
-        {
-          'name': cloudflare_access_policy.name,
-          'decision': cloudflare_access_policy.decision,
-          'include': cloudflare_access_policy.include,
-          'require': cloudflare_access_policy.require | default([]),
-          'exclude': cloudflare_access_policy.exclude | default([])
-        }
-        | combine(
-            {'session_duration': cloudflare_access_policy.session_duration}
-            if (cloudflare_access_policy.session_duration | default('') | length > 0)
-            else {}
-          )
-        | combine(
-            {'precedence': cloudflare_access_policy.precedence}
-            if (cloudflare_access_policy.precedence is defined)
-            else {}
-          )
-      }}
-    cacheable: false
-
-- name: Create Access application policy
-  when: (_cloudflare_access_policy_match.id | default('') | length) == 0
-  no_log: "{{ cloudflare_no_log | default(true) }}"
-  ansible.builtin.uri:
-    body: "{{ _cloudflare_access_policy_body }}"
-    body_format: json
-    headers:
-      Authorization: "Bearer {{ cloudflare_api_token }}"
-      Content-Type: application/json
-    method: POST
-    return_content: true
-    status_code: [200, 201]
-    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/access/apps/{{ _cloudflare_access_app_id }}/policies"
-
-- name: Update existing Access application policy
-  when: (_cloudflare_access_policy_match.id | default('') | length) > 0
-  no_log: "{{ cloudflare_no_log | default(true) }}"
-  ansible.builtin.uri:
-    body: "{{ _cloudflare_access_policy_body }}"
-    body_format: json
-    headers:
-      Authorization: "Bearer {{ cloudflare_api_token }}"
-      Content-Type: application/json
-    method: PUT
-    return_content: true
-    status_code: [200]
-    url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/access/apps/{{ _cloudflare_access_app_id }}/policies/{{ _cloudflare_access_policy_match.id }}"
+- name: Apply each Access policy
+  loop: "{{ cloudflare_access_app.policies }}"
+  loop_control:
+    loop_var: cloudflare_access_policy
+    label: "{{ cloudflare_access_policy.name }}"
+  ansible.builtin.include_tasks: configure_access_policy_entry.yml

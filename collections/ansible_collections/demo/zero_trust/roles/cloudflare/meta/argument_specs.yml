@@ -133,16 +133,17 @@ argument_specs:
       cloudflare_account_id:
         type: str
         required: false
-        description: Cloudflare account ID (required when cloudflare_access_policies is non-empty)
-      cloudflare_access_policies:
+        description: Cloudflare account ID (required when cloudflare_access_apps is non-empty)
+      cloudflare_access_apps:
         type: list
         elements: dict
         required: false
         default: []
         description: >-
-          Optional Access policies. Each entry has name, hostname, decision,
-          include (required), and optional require, exclude, session_duration,
-          precedence. When empty, this entry point is a no-op.
+          Optional Access applications. Each entry requires name, hostname, and a
+          non-empty policies list. Each policy requires name, decision, and include;
+          optional require, exclude, session_duration, precedence. When empty, this
+          entry point is a no-op.
       cloudflare_api_base:
         type: str
         required: false
@@ -226,14 +227,14 @@ argument_specs:
         description: >-
           Public hostname definitions whose CNAME records should be removed.
           Each entry requires hostname.
-      cloudflare_access_policies:
+      cloudflare_access_apps:
         type: list
         elements: dict
         required: false
         default: []
         description: >-
-          Access policies whose applications should be deleted. Matching is by
-          hostname. When empty, Access cleanup is skipped.
+          Access applications to delete. Each entry requires name and hostname;
+          matching is by hostname. When empty, Access cleanup is skipped.
       cloudflare_api_base:
         type: str
         required: false

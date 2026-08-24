@@ -21,9 +21,9 @@
     status_code: [200]
     url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/access/apps"
 
-- name: Apply Access policy for each entry
-  loop: "{{ cloudflare_access_policies }}"
+- name: Apply Access app and policies for each entry
+  loop: "{{ cloudflare_access_apps }}"
   loop_control:
-    loop_var: cloudflare_access_policy
-    label: "{{ cloudflare_access_policy.name | default(cloudflare_access_policy.hostname) }}"
+    loop_var: cloudflare_access_app
+    label: "{{ cloudflare_access_app.name }}"
   ansible.builtin.include_tasks: configure_access_policy.yml

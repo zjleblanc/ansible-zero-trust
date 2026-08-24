@@ -52,7 +52,7 @@
 - name: List existing Access applications
   when:
     - (_cloudflare_existing_tunnel.id | default('') | length) > 0
-    - (cloudflare_access_policies | default([]) | length) > 0
+    - (cloudflare_access_apps | default([]) | length) > 0
   no_log: "{{ cloudflare_no_log | default(true) }}"
   register: cloudflare_access_apps_list
   ansible.builtin.uri:
@@ -64,14 +64,14 @@
     status_code: [200]
     url: "{{ cloudflare_api_base }}/accounts/{{ cloudflare_account_id }}/access/apps"
 
-- name: Delete Access application for each policy hostname
+- name: Delete Access application for each app
   when:
     - (_cloudflare_existing_tunnel.id | default('') | length) > 0
-    - (cloudflare_access_policies | default([]) | length) > 0
-  loop: "{{ cloudflare_access_policies }}"
+    - (cloudflare_access_apps | default([]) | length) > 0
+  loop: "{{ cloudflare_access_apps | default([]) }}"
   loop_control:
-    loop_var: cloudflare_access_policy
-    label: "{{ cloudflare_access_policy.name | default(cloudflare_access_policy.hostname) }}"
+    loop_var: cloudflare_access_app
+    label: "{{ cloudflare_access_app.name }}"
   ansible.builtin.include_tasks: destroy_access_app.yml
 
 - name: Assert zone is set when deleting DNS hostnames

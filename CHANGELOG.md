@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-08-24 — Skip Podman install on rpm-ostree hosts
+
+### Changed
+
+- `cloudflare` role `install_podman` now probes `/run/ostree-booted` before attempting package installation; the `ansible.builtin.package` task is skipped on immutable OS deployments (RHEL CoreOS, RHEL for Edge, Fedora CoreOS) where Podman is pre-installed in the base image and `dnf`/`yum` cannot write to the read-only root filesystem
+
+## 2026-08-24 — Restructure Cloudflare Access variable to nest policies under apps
+
+### Changed
+
+- `cloudflare_access_policies` renamed to `cloudflare_access_apps`; each entry now carries a `name` (the Cloudflare app display name), `hostname`, and a `policies` list — enabling multiple access policies per application
+- `configure_access_policy.yml` rewritten as the app-level handler (find/create app, set ID, refresh, list existing policies, then loop over `policies`)
+- Per-policy CRUD (assert fields, find existing, build body, create/update) extracted to new `configure_access_policy_entry.yml`
+- `configure_access_apply.yml`, `configure_access.yml`, `destroy_access_app.yml`, and `destroy_tunnel.yml` updated to use the `cloudflare_access_apps` / `cloudflare_access_app` loop variable throughout
+- `defaults/main/access.yml` default variable and inline example updated to the new shape
+- `argument_specs.yml` updated for both `configure_access` and `destroy_tunnel` entry points
+- `inventory/local.yml` restructured: `vault`, `openflake`, and `portal` hosts now use `cloudflare_access_apps` with descriptive app names (`Vault Secret Store`, `OpenFlake Data Platform`, `Ansible Automation Portal`) and policies nested beneath them
+
+### Migration
+
+Rename `cloudflare_access_policies` to `cloudflare_access_apps` in inventory/vars, move `hostname` to the app level, and nest existing policy fields under a `policies` key.
+
 ## 2026-08-03 — Require vault_deployment_type for uninstall
 
 ### Changed
