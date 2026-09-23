@@ -3,13 +3,22 @@
   hosts: "{{ _hosts | default(omit) }}"
 
   vars:
-    cloudflare_uninstall_tasks:
-      - uninstall_podman
-      - destroy_tunnel
+    _uninstall_scope: "{{ cloudflare_uninstall_scope | default('all') }}"
+    _uninstall_scope_map:
+      all:
+        - uninstall_podman
+        - destroy_tunnel
+      local:
+        - uninstall_podman
+      remote:
+        - destroy_tunnel
+    cloudflare_uninstall_tasks: "{{ _uninstall_scope_map[_uninstall_scope] }}"
 
   tasks:
     - name: Load ansible-vault secrets when CLOUDFLARE_API_TOKEN is unset
-      when: lookup('ansible.builtin.env', 'CLOUDFLARE_API_TOKEN') | length == 0
+      when:
+        - _uninstall_scope != 'local'
+        - lookup('ansible.builtin.env', 'CLOUDFLARE_API_TOKEN') | length == 0
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/vars/secrets.yml"
 

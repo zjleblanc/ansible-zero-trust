@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-23 — Add uninstall scope to Cloudflare Tunnel playbook
+
+### Added
+
+- `cloudflare_uninstall_scope` variable to `pb_uninstall_cloudflare_tunnel.yml` (default `all`), allowing targeted cleanup of `local` Podman artifacts or `remote` Cloudflare API resources
+
+### Changed
+
+- `pb_uninstall_cloudflare_tunnel.yml` loads secrets only when the scope includes remote operations, preventing unnecessary Vault decryption prompts for local-only uninstalls
+- Reformatted comments in `ansible.cfg` for better readability
+
 ## 2026-08-24 — Skip Podman install on rpm-ostree hosts
 
 ### Changed
