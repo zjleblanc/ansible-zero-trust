@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-04 — Fix rootless Podman volume permissions and Ansible local tmp
+
+### Fixed
+
+- Rootless Podman Quadlet startup failures caused by SELinux relabeling errors (`lsetxattr: operation not permitted`); `vault` role tasks (`configure_host`, `init_vault`) now explicitly set `owner` and `group` to `vault_podman_user` for TLS certificates and initialization data stored in `/opt/vault`.
+- Added `local_tmp` and `remote_tmp` to `ansible.cfg` to prevent permission errors (`[Errno 1] Operation not permitted`) when running Ansible in restricted environments where default tmp paths are unavailable.
+
 ## 2026-09-23 — Add uninstall scope to Cloudflare Tunnel playbook
 
 ### Added

@@ -7,7 +7,9 @@
   become: true
   ansible.builtin.file:
     state: directory
+    group: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_gid }}"
     mode: "0755"
+    owner: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_uid }}"
     path: "{{ vault_tls_cert_dest | dirname }}"
 
 - name: Copy TLS certificate to host
@@ -18,7 +20,9 @@
   become: true
   ansible.builtin.copy:
     dest: "{{ vault_tls_cert_dest }}"
+    group: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_gid }}"
     mode: "0644"
+    owner: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_uid }}"
     src: "{{ vault_tls_cert_src }}"
 
 - name: Copy TLS private key to host
@@ -29,7 +33,9 @@
   become: true
   ansible.builtin.copy:
     dest: "{{ vault_tls_key_dest }}"
+    group: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_gid }}"
     mode: "0600"
+    owner: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_uid }}"
     src: "{{ vault_tls_key_src }}"
 
 - name: Setup firewall rule

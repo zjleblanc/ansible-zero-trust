@@ -45,7 +45,9 @@
   ansible.builtin.copy:
     content: "{{ vault_init_data | to_nice_json(indent=2) }}\n"
     dest: "{{ vault_storage_path }}/init_data.json"
+    group: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_gid }}"
     mode: "0600"
+    owner: "{{ vault_podman_user if (vault_podman_rootless | bool) else vault_container_uid }}"
 
 - name: Load existing vault init data
   when: _vault_initialized | bool
